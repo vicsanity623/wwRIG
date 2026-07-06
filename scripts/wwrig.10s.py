@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 <bitbar.title>WWRIG Pool Monitor</bitbar.title>
-<bitbar.version>v0.1</bitbar.version>
+<bitbar.version>v0.3</bitbar.version>
 <bitbar.author>WWRIG</bitbar.author>
 <bitbar.desc>Shows WWRIG distributed compute pool stats in your menu bar</bitbar.desc>
 <bitbar.image></bitbar.image>
@@ -15,9 +15,10 @@ import urllib.error
 import sys
 
 COORDINATOR = "http://localhost:8081"
+PUBLIC_URL = "https://vics-imac-1.tail37b4f2.ts.net:8441"
 
 try:
-    req = urllib.request.Request(f"{COORDINATOR}/api/stats", headers={"User-Agent": "wwrig-swiftbar"})
+    req = urllib.request.Request(f"{COORDINATOR}/api/stats")
     resp = urllib.request.urlopen(req, timeout=5)
     s = json.loads(resp.read())
 
@@ -41,7 +42,7 @@ try:
     print(f"font=14")
 
     # Header
-    print(f":computer: WWRIG Pool | font=13 color=green")
+    print(f"WWRIG Pool | font=13 color=green")
     print("---")
 
     # Pool Summary
@@ -53,11 +54,24 @@ try:
     print(f"-- VRAM (shared): {vram:.1f}GB")
     print(f"-- Platforms: {', '.join(p.upper() for p in platforms) if platforms else 'none'}")
 
+    # VM sessions
+    try:
+        vreq = urllib.request.Request(f"{COORDINATOR}/api/vm/sessions")
+        vresp = urllib.request.urlopen(vreq, timeout=5)
+        sessions = json.loads(vresp.read())
+        running = [vm for vm in sessions if vm.get("status") == "running"]
+        if running:
+            print(f"-- VM Sessions: {len(running)} running")
+            for vm in running:
+                print(f"---- {vm['id']} {vm.get('os_type','?')}  {vm.get('vcpus',0)}c {vm.get('ram_mb',0)//1024}G")
+    except Exception:
+        pass
+
     print("---")
 
     # Nodes list
     try:
-        nreq = urllib.request.Request(f"{COORDINATOR}/api/nodes", headers={"User-Agent": "wwrig-swiftbar"})
+        nreq = urllib.request.Request(f"{COORDINATOR}/api/nodes")
         nresp = urllib.request.urlopen(nreq, timeout=5)
         node_list = json.loads(nresp.read())
 
@@ -69,24 +83,27 @@ try:
             cpu = n.get("cpu_cores", 0)
             ram_n = n.get("ram_total_gb", 0)
             contrib = n.get("contribution_pct", 0)
-            print(f"-- {status} {host} [{plat}] {cpu}c {ram_n:.0f}GB ({contrib:.0f}%)")
+            gpu = n.get("gpu_name")
+            print(f"-- {status} {host} [{plat}] {cpu}c {ram_n:.0f}GB ({contrib:.0f}%)" + (f" GPU:{gpu}" if gpu else ""))
     except Exception:
         print("-- Could not fetch node list")
 
     print("---")
 
-    # Dashboard links
-    print(f"Open Dashboard | href=http://localhost:8081")
-    print(f"Open Mobile Node | href=http://localhost:8081/mobile.html")
+    # Links
+    print(f"Open Dashboard | href={COORDINATOR}")
+    print(f"Open Mobile Node | href={COORDINATOR}/mobile.html")
+    print(f"Public URL | href={PUBLIC_URL}")
 
     print("---")
     print(f"Coordinator: {COORDINATOR} | color=gray")
+    print(f"Public: {PUBLIC_URL} | color=gray")
 
 except urllib.error.URLError:
     print("○ WWRIG")
     print("---")
     print("Coordinator offline")
-    print(f"Retry: {COORDINATOR} | href=http://localhost:8081")
+    print(f"Retry: {COORDINATOR} | href={COORDINATOR}")
 except Exception as e:
     print(f"○ WWRIG")
     print("---")

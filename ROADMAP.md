@@ -1,6 +1,6 @@
 # WWRIG Roadmap — From LAN Demo to World Wide Rig
 
-Current: **v0.2** — Local network prototype with real QEMU VM + mobile node support.
+Current: **v0.2.1** — Local network prototype with real QEMU VM, mobile node support, working keyboard, and periodic display refresh.
 
 The vision is grand, but the path is grounded in real engineering constraints.
 Below is the honest, step-by-step plan.

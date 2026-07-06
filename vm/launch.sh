@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# WWRIG VM Launcher — World Wide Rig v0.2
+# WWRIG VM Launcher — World Wide Rig v0.2.1
 # Launches a QEMU virtual machine and exposes it via noVNC in the browser.
 #
 # Usage: bash launch.sh <os_type> <vcpus> <ram_mb> <vnc_port>
@@ -110,9 +110,11 @@ case "$OS_TYPE" in
       -boot order=cd,once=d \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
+      -k en-us \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
-      -usb -device usb-tablet \
+      -usb -device usb-tablet -device usb-kbd \
+      -serial none \
       -daemonize \
       -pidfile "$LOG_DIR/wwrig-linux-${VNC_PORT}.pid"
 

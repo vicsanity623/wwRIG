@@ -45,7 +45,7 @@ if not AUTH_TOKEN:
         except Exception:
             pass
 
-app = FastAPI(title="WWRIG Coordinator", version="0.2.0")
+app = FastAPI(title="WWRIG Coordinator", version="0.2.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -113,7 +113,7 @@ class ContributionUpdate(BaseModel):
 async def health():
     return {
         "status": "ok",
-        "version": "0.2.0",
+        "version": "0.2.1",
         "node_count": len(nodes),
         "auth_required": bool(AUTH_TOKEN),
     }
@@ -276,6 +276,10 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
             sock.close()
             vnc_port += 1
     ws_port = vnc_port + 100
+    novnc_url = (
+        f"http://localhost:{ws_port}/vnc.html"
+        "?autoconnect=true&resize=scale"
+    )
 
     vcpus = max(2, min(stats["contributed_cores"], 8))
     ram_mb = max(2048, min(int(stats["contributed_ram_gb"] * 1024), 8192))
@@ -287,6 +291,7 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         "ram_mb": ram_mb,
         "vnc_port": vnc_port,
         "ws_port": ws_port,
+        "novnc_url": novnc_url,
         "status": "provisioning",
         "started": time.time(),
         "pid": None,
@@ -304,10 +309,7 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         "vcpus": vcpus,
         "ram_mb": ram_mb,
         "vnc_port": vnc_port,
-        "novnc_url": (
-            f"http://localhost:{ws_port}/vnc.html"
-            "?autoconnect=true&resize=scale"
-        ),
+        "novnc_url": novnc_url,
         "message": f"wwrig.{req.os_type} session {vm_id} is provisioning...",
     }
 
@@ -368,7 +370,7 @@ async def get_log(limit: int = 60):
 @app.on_event("startup")
 async def startup():
     log("═══════════════════════════════════════════════")
-    log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.2")
+    log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.2.1")
     log(f"  Listening on {HOST}:{PORT}")
     if AUTH_TOKEN:
         log(f"  Auth token: {AUTH_TOKEN}")

@@ -1,4 +1,4 @@
-# WWRIG — World Wide Rig v0.2
+# WWRIG — World Wide Rig v0.2.1
 
 ### *Distributed computing, one node at a time.*
 
@@ -18,9 +18,11 @@ WWRIG is a **local-network distributed computing prototype**. It lets multiple d
 - Live dashboard with aggregate pool specs (cores, RAM, VRAM)
 - **Real Alpine Linux VM** launched via QEMU with HVF/KVM acceleration
 - Full browser-based desktop via noVNC (keyboard + mouse)
+- Auto-resolving VNC port conflicts (finds a free port if 5900 is busy)
+- Periodic display refresh (display updates every 2.5s)
 - Auth tokens to control who can join your coordinator
 - Docker deployment for the coordinator
-- macOS menubar plugin (SwiftBar/xBar) showing pool stats
+- macOS menubar plugin (SwiftBar/xBar) showing pool stats + VM sessions
 
 ### What is display-only (v0.x limitations):
 - The VM runs **solely on the coordinator's machine** — it cannot use other nodes' CPU/RAM
