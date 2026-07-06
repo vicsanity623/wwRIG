@@ -76,6 +76,9 @@
     <div class="section">
       <input type="text" id="coord-url" placeholder="http://192.168.0.11:8081" autocomplete="url">
     </div>
+    <div class="section">
+      <input type="text" id="auth-token" placeholder="Auth token (optional)" autocomplete="off" style="font-size:10px">
+    </div>
     <div class="section" style="display:flex;gap:8px">
       <button class="btn primary" id="btn-connect" onclick="connect()">▶ Connect to WWRIG</button>
     </div>
@@ -152,11 +155,14 @@ function init() {
   if (coordinatorUrl) {
     input.value = coordinatorUrl;
   } else {
-    // Derive from page URL if on the coordinator
     const origin = window.location.origin;
     if (origin && origin !== 'null' && !origin.includes('localhost')) {
       input.value = origin;
     }
+  }
+  const savedToken = localStorage.getItem('wwrig_auth_token');
+  if (savedToken) {
+    document.getElementById('auth-token').value = savedToken;
   }
   document.getElementById('node-id-display').textContent = 'Node ID: ' + nodeId;
 }
@@ -213,6 +219,13 @@ async function connect() {
   coordinatorUrl = url;
   localStorage.setItem('wwrig_coordinator', url);
 
+  const tokenInput = document.getElementById('auth-token');
+  const authToken = tokenInput.value.trim();
+  localStorage.setItem('wwrig_auth_token', authToken);
+
+  const headers = {'Content-Type': 'application/json'};
+  if (authToken) headers['X-WWRIG-Token'] = authToken;
+
   const btn = document.getElementById('btn-connect');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span>Connecting...';
@@ -244,10 +257,13 @@ async function connect() {
 
     const reg = await fetchWithTimeout(`${coordinatorUrl}/api/nodes/register`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: JSON.stringify(regPayload),
     }, 5000);
-    if (!reg.ok) throw new Error('Registration failed: ' + (await reg.text()));
+    if (!reg.ok) {
+      if (reg.status === 401) throw new Error('Auth token rejected — check with coordinator owner');
+      throw new Error('Registration failed: ' + (await reg.text()));
+    }
     registered = true;
 
     connected = true;
@@ -293,18 +309,27 @@ async function sendHeartbeat() {
       gpu_usage_pct: 0,
     };
 
+    const headers = {'Content-Type': 'application/json'};
+    const savedToken = localStorage.getItem('wwrig_auth_token');
+    if (savedToken) headers['X-WWRIG-Token'] = savedToken;
+
     const r = await fetchWithTimeout(`${coordinatorUrl}/api/nodes/heartbeat`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: JSON.stringify(hbPayload),
     }, 3000);
 
+    if (r.status === 401) {
+      showStatus('Auth token rejected. Reconnect with a valid token.', 'error');
+      disconnect();
+      return;
+    }
+
     if (r.status === 404) {
-      // Re-register
       const device = await detectDevice();
       await fetchWithTimeout(`${coordinatorUrl}/api/nodes/register`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: JSON.stringify({
           node_id: nodeId, hostname: device.hostname, platform: device.platform,
           cpu_brand: device.cpuBrand, cpu_cores: device.cpuCores,

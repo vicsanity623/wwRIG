@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-WWRIG Coordinator — World Wide Rig v0.1
+WWRIG Coordinator — World Wide Rig v0.2
 Central registry that aggregates resources from every connected rig node
 and manages temporary OS session allocation.
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -20,7 +20,32 @@ import os
 import json
 from pathlib import Path
 
-app = FastAPI(title="WWRIG Coordinator", version="0.1.0")
+# ─── Configuration ─────────────────────────────────────────────────────────
+HOST = os.getenv("WWRIG_HOST", "0.0.0.0")
+PORT = int(os.getenv("WWRIG_PORT", "8081"))
+AUTH_TOKEN = os.getenv("WWRIG_AUTH_TOKEN", "")
+
+SCRIPT_DIR = Path(__file__).parent
+PROJECT_DIR = SCRIPT_DIR.parent
+
+# Auto-generate auth token if not set
+if not AUTH_TOKEN:
+    token_path = PROJECT_DIR / "wwrig_config.json"
+    if token_path.exists():
+        try:
+            cfg = json.loads(token_path.read_text())
+            AUTH_TOKEN = cfg.get("auth_token", "")
+        except Exception:
+            pass
+    if not AUTH_TOKEN:
+        AUTH_TOKEN = uuid.uuid4().hex[:16]
+        try:
+            cfg = {"auth_token": AUTH_TOKEN, "host": HOST, "port": PORT}
+            token_path.write_text(json.dumps(cfg, indent=2))
+        except Exception:
+            pass
+
+app = FastAPI(title="WWRIG Coordinator", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +58,7 @@ app.add_middleware(
 nodes: Dict[str, Any] = {}
 vm_sessions: Dict[str, Any] = {}
 event_log: List[Dict] = []
-NODE_TIMEOUT = 30  # seconds before a node is considered offline
+NODE_TIMEOUT = 30
 
 def log(msg: str, level: str = "INFO"):
     entry = {"ts": round(time.time(), 2), "level": level, "msg": msg}
@@ -42,12 +67,15 @@ def log(msg: str, level: str = "INFO"):
         event_log.pop(0)
     print(f"[WWRIG/{level}] {msg}")
 
+def require_auth(x_wwrig_token: str = Header("")):
+    if AUTH_TOKEN and x_wwrig_token != AUTH_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid or missing WWRIG auth token")
 
 # ─── Pydantic Models ─────────────────────────────────────────────────────────
 class NodeRegistration(BaseModel):
     node_id: str
     hostname: str
-    platform: str            # darwin / linux / windows / android
+    platform: str
     cpu_brand: str
     cpu_cores: int
     cpu_threads: int
@@ -55,7 +83,7 @@ class NodeRegistration(BaseModel):
     ram_total_gb: float
     gpu_name: Optional[str] = "N/A"
     gpu_vram_gb: Optional[float] = 0.0
-    contribution_pct: float = 10.0   # % of resources shared with wwrig
+    contribution_pct: float = 10.0
 
 class NodeHeartbeat(BaseModel):
     node_id: str
@@ -64,16 +92,26 @@ class NodeHeartbeat(BaseModel):
     gpu_usage_pct: Optional[float] = 0.0
 
 class VMRequest(BaseModel):
-    os_type: str    # "linux" | "windows" | "macos"
+    os_type: str
 
 class ContributionUpdate(BaseModel):
     node_id: str
     contribution_pct: float
 
+# ─── Health ──────────────────────────────────────────────────────────────────
+@app.get("/api/health")
+async def health():
+    return {
+        "status": "ok",
+        "version": "0.2.0",
+        "node_count": len(nodes),
+        "auth_required": bool(AUTH_TOKEN),
+    }
 
 # ─── Node Endpoints ──────────────────────────────────────────────────────────
 @app.post("/api/nodes/register")
-async def register_node(reg: NodeRegistration):
+async def register_node(reg: NodeRegistration, x_wwrig_token: str = Header("")):
+    require_auth(x_wwrig_token)
     is_new = reg.node_id not in nodes
     nodes[reg.node_id] = {
         **reg.dict(),
@@ -89,11 +127,12 @@ async def register_node(reg: NodeRegistration):
         f"{reg.cpu_cores}c/{reg.cpu_threads}t @ {reg.cpu_freq_ghz}GHz | "
         f"{reg.ram_total_gb:.1f}GB RAM | GPU: {reg.gpu_name} ({reg.gpu_vram_gb:.1f}GB) | "
         f"Sharing: {reg.contribution_pct:.0f}%")
-    return {"status": "registered", "node_id": reg.node_id}
+    return {"status": "registered", "node_id": reg.node_id, "auth_required": bool(AUTH_TOKEN)}
 
 
 @app.post("/api/nodes/heartbeat")
-async def heartbeat(hb: NodeHeartbeat):
+async def heartbeat(hb: NodeHeartbeat, x_wwrig_token: str = Header("")):
+    require_auth(x_wwrig_token)
     if hb.node_id not in nodes:
         raise HTTPException(status_code=404, detail="Node not registered. Please re-register.")
     nodes[hb.node_id].update({
@@ -120,7 +159,8 @@ async def list_nodes():
 
 
 @app.post("/api/nodes/contribution")
-async def update_contribution(update: ContributionUpdate):
+async def update_contribution(update: ContributionUpdate, x_wwrig_token: str = Header("")):
+    require_auth(x_wwrig_token)
     if update.node_id not in nodes:
         raise HTTPException(status_code=404, detail="Node not found")
     old = nodes[update.node_id]["contribution_pct"]
@@ -197,7 +237,6 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
     vnc_port = 5900 + len(vm_sessions)
     ws_port  = vnc_port + 100
 
-    # Allocate resources from contributed pool (cap to what host can provide)
     vcpus  = max(2, min(stats["contributed_cores"], 8))
     ram_mb = max(2048, min(int(stats["contributed_ram_gb"] * 1024), 8192))
 
@@ -217,7 +256,6 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         f"— {vcpus} vCPU / {ram_mb}MB RAM / VNC:{vnc_port}", "LAUNCH")
 
     background_tasks.add_task(_start_vm, vm_id, req.os_type, vcpus, ram_mb, vnc_port)
-
     return {
         "vm_id":      vm_id,
         "status":     "provisioning",
@@ -241,7 +279,7 @@ async def terminate_session(vm_id: str):
     pid = vm_sessions[vm_id].get("pid")
     if pid:
         try:
-            os.kill(pid, 15)  # SIGTERM
+            os.kill(pid, 15)
         except ProcessLookupError:
             pass
     vm_sessions[vm_id]["status"] = "terminated"
@@ -251,7 +289,7 @@ async def terminate_session(vm_id: str):
 
 async def _start_vm(vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port: int):
     """Invoke the vm/launch.sh script (QEMU + noVNC)"""
-    script = Path(__file__).parent.parent / "vm" / "launch.sh"
+    script = PROJECT_DIR / "vm" / "launch.sh"
     if script.exists():
         try:
             proc = subprocess.Popen(
@@ -266,7 +304,6 @@ async def _start_vm(vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port:
             vm_sessions[vm_id]["status"] = "error"
             log(f"SESSION ERROR: {vm_id} — {e}", "ERROR")
     else:
-        # Demo mode — no QEMU installed yet
         await asyncio.sleep(3)
         vm_sessions[vm_id]["status"] = "running (demo)"
         log(f"SESSION DEMO: {vm_id} — vm/launch.sh not found, running in display-only mode", "WARN")
@@ -282,8 +319,13 @@ async def get_log(limit: int = 60):
 @app.on_event("startup")
 async def startup():
     log("═══════════════════════════════════════════════")
-    log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.1")
-    log("  Listening on 0.0.0.0:8081")
+    log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.2")
+    log(f"  Listening on {HOST}:{PORT}")
+    if AUTH_TOKEN:
+        log(f"  Auth token: {AUTH_TOKEN}")
+        log("  Nodes must provide X-WWRIG-Token header")
+    else:
+        log("  Auth disabled (no WWRIG_AUTH_TOKEN set)")
     log("═══════════════════════════════════════════════")
     asyncio.create_task(_node_watchdog())
 
@@ -301,10 +343,9 @@ async def _node_watchdog():
 
 
 # ─── Static Serve (must be last) ─────────────────────────────────────────────
-static_dir = Path(__file__).parent / "static"
+static_dir = SCRIPT_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8081, reload=False, log_level="warning")
-
+    uvicorn.run("server:app", host=HOST, port=PORT, reload=False, log_level="warning")

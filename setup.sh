@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# WWRIG Setup Script — World Wide Rig v0.1
+# WWRIG Setup Script — World Wide Rig v0.2
 # Installs dependencies and starts the full WWRIG stack on this machine.
 #
 # Usage:
@@ -8,6 +8,7 @@
 #   bash setup.sh coordinator  # Start coordinator only
 #   bash setup.sh node         # Start node daemon only
 #   bash setup.sh stop         # Stop all WWRIG processes
+#   bash setup.sh token        # Show the current auth token
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
@@ -22,9 +23,17 @@ RED='\033[0;31m'
 DIM='\033[2m'
 NC='\033[0m'
 
+# Load .env if present
+ENV_FILE="$WWRIG_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
+
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║        WWRIG  —  World Wide Rig  —  v0.1              ║${NC}"
+echo -e "${GREEN}║        WWRIG  —  World Wide Rig  —  v0.2              ║${NC}"
 echo -e "${GREEN}║        Setup & Launcher                                ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
 echo ""
@@ -37,6 +46,17 @@ if [ "$MODE" = "stop" ]; then
   pkill -f "websockify"            2>/dev/null && echo "  [OK] noVNC stopped"       || true
   pkill -f "qemu-system"           2>/dev/null && echo "  [OK] QEMU stopped"        || true
   echo ""
+  exit 0
+fi
+
+# ── Token mode ────────────────────────────────────────────────────────────────
+if [ "$MODE" = "token" ]; then
+  if [ -f "$WWRIG_DIR/wwrig_config.json" ]; then
+    TOKEN=$(python3 -c "import json; print(json.load(open('$WWRIG_DIR/wwrig_config.json')).get('auth_token', 'none'))")
+    echo "  WWRIG Auth Token: $TOKEN"
+  else
+    echo "  Coordinator has not been started yet — no token generated."
+  fi
   exit 0
 fi
 
@@ -150,6 +170,12 @@ elif [ -d "$XBAR_DIR" ]; then
   echo "  [OK] xBar plugin installed"
 fi
 
+# ── Read auth token for display ────────────────────────────────────────────────
+AUTH_TOKEN_DISPLAY=""
+if [ -f "$WWRIG_DIR/wwrig_config.json" ]; then
+  AUTH_TOKEN_DISPLAY=$(python3 -c "import json; print(json.load(open('$WWRIG_DIR/wwrig_config.json')).get('auth_token', ''))" 2>/dev/null || true)
+fi
+
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                 WWRIG IS LIVE                         ║${NC}"
@@ -158,13 +184,24 @@ echo -e "${GREEN}║                                                       ║${
 echo -e "${GREEN}║  Dashboard   : http://localhost:8081                  ║${NC}"
 echo -e "${GREEN}║  On your LAN : http://${LOCAL_IP}:8081           ║${NC}"
 echo -e "${GREEN}║  Mobile Node : http://${LOCAL_IP}:8081/mobile.html ║${NC}"
-echo -e "${GREEN}║  (Open this URL on your Android phone)               ║${NC}"
 echo -e "${GREEN}║                                                       ║${NC}"
+if [ -n "$AUTH_TOKEN_DISPLAY" ]; then
+echo -e "${GREEN}║  Auth Token  : ${AUTH_TOKEN_DISPLAY}              ║${NC}"
+echo -e "${GREEN}║  (required by nodes to join this coordinator)        ║${NC}"
+echo -e "${GREEN}║                                                       ║${NC}"
+fi
 echo -e "${GREEN}║  Add more nodes (other machines):                    ║${NC}"
 echo -e "${GREEN}║  python3 node/daemon.py \\                            ║${NC}"
-echo -e "${GREEN}║    --coordinator http://${LOCAL_IP}:8081        ║${NC}"
+echo -e "${GREEN}║    --coordinator http://${LOCAL_IP}:8081 \\      ║${NC}"
+if [ -n "$AUTH_TOKEN_DISPLAY" ]; then
+echo -e "${GREEN}║    --token ${AUTH_TOKEN_DISPLAY}               ║${NC}"
+else
+echo -e "${GREEN}║    --contribution 10                             ║${NC}"
+fi
 echo -e "${GREEN}║                                                       ║${NC}"
-echo -e "${GREEN}║  Stop all:  bash setup.sh stop                       ║${NC}"
-echo -e "${GREEN}║  Logs:      tail -f coordinator.log                  ║${NC}"
+echo -e "${GREEN}║  Docker deploy: docker compose up -d                  ║${NC}"
+echo -e "${GREEN}║  Stop all:      bash setup.sh stop                    ║${NC}"
+echo -e "${GREEN}║  Show token:    bash setup.sh token                   ║${NC}"
+echo -e "${GREEN}║  Logs:          tail -f coordinator.log               ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
 echo ""

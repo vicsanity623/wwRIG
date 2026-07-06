@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  coordinator:
+    build: .
+    container_name: wwrig-coordinator
+    ports:
+      - "${WWRIG_PORT:-8081}:${WWRIG_PORT:-8081}"
+    environment:
+      - WWRIG_HOST=0.0.0.0
+      - WWRIG_PORT=${WWRIG_PORT:-8081}
+      - WWRIG_AUTH_TOKEN=${WWRIG_AUTH_TOKEN:-}
+    volumes:
+      - wwrig_vm_images:/app/vm/images
+      - wwrig_vm_logs:/app/vm/logs
+      - wwrig_config:/app/wwrig_config.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${WWRIG_PORT:-8081}/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  wwrig_vm_images:
+  wwrig_vm_logs:
+  wwrig_config:

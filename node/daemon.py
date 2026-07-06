@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-WWRIG Node Daemon — World Wide Rig v0.1
+WWRIG Node Daemon — World Wide Rig v0.2
 Runs on each contributing machine. Reports system specs and
 sends heartbeats to the WWRIG Coordinator.
 
 Usage:
-    python daemon.py                           # auto-detect coordinator on localhost
+    python daemon.py
     python daemon.py --coordinator http://192.168.1.100:8081
-    python daemon.py --contribution 15         # share 15% of resources (default: 10)
+    python daemon.py --token mysecrettoken
 """
 
 import argparse
@@ -30,6 +30,26 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 CONFIG_FILE = Path(__file__).parent / "node_config.json"
+ENV_FILE = Path(__file__).parent.parent / ".env"
+
+def load_env():
+    """Minimal .env loader — no dependency needed"""
+    if not ENV_FILE.exists():
+        return
+    try:
+        for line in ENV_FILE.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip().strip("\"'")
+            if key.startswith("WWRIG_"):
+                os.environ.setdefault(key, val)
+    except Exception:
+        pass
+
+load_env()
 
 def load_config():
     if CONFIG_FILE.exists():
@@ -44,7 +64,6 @@ def save_config(cfg: dict):
 
 # ── System Info ───────────────────────────────────────────────────────────────
 def get_cpu_brand() -> str:
-    """Best-effort CPU brand string across platforms"""
     sys_plat = platform.system()
     try:
         if sys_plat == "Darwin":
@@ -70,19 +89,17 @@ def get_cpu_brand() -> str:
 
 
 def get_cpu_freq_ghz() -> float:
-    """Get max CPU frequency in GHz"""
     try:
         freq = psutil.cpu_freq()
         if freq:
             val = freq.max if freq.max else freq.current
-            return round(val / 1000, 2)  # MHz → GHz
+            return round(val / 1000, 2)
     except Exception:
         pass
     return 0.0
 
 
 def get_gpu_info() -> tuple[str, float]:
-    """Returns (gpu_name, vram_gb) — best-effort across platforms"""
     sys_plat = platform.system()
     try:
         if sys_plat == "Darwin":
@@ -95,7 +112,6 @@ def get_gpu_info() -> tuple[str, float]:
             for d in displays:
                 name  = d.get("sppci_model", "Unknown GPU")
                 vram  = d.get("spdisplays_vram", "0 MB")
-                # Parse "4096 MB" or "4 GB"
                 parts = vram.split()
                 if len(parts) == 2:
                     num = float(parts[0].replace(",", ""))
@@ -106,7 +122,6 @@ def get_gpu_info() -> tuple[str, float]:
             return "Apple GPU (integrated)", 0.0
 
         elif sys_plat == "Linux":
-            # Try nvidia-smi first
             try:
                 out = subprocess.check_output(
                     ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
@@ -119,7 +134,6 @@ def get_gpu_info() -> tuple[str, float]:
                     return name, round(vram, 2)
             except Exception:
                 pass
-            # Try AMD rocm-smi
             try:
                 out = subprocess.check_output(
                     ["rocm-smi", "--showmeminfo", "vram", "--csv"],
@@ -189,22 +203,35 @@ def build_heartbeat(node_id: str) -> dict:
         "node_id":       node_id,
         "cpu_usage_pct": psutil.cpu_percent(interval=1),
         "ram_used_gb":   round((vm.total - vm.available) / (1024**3), 2),
-        "gpu_usage_pct": 0.0,   # Extend with nvidia-smi if available
+        "gpu_usage_pct": 0.0,
     }
+
+
+# ── HTTP helpers ──────────────────────────────────────────────────────────────
+def api_headers(token: str) -> dict:
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-WWRIG-Token"] = token
+    return headers
 
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="WWRIG Node Daemon")
-    parser.add_argument("--coordinator", default="http://localhost:8081",
-                        help="Coordinator URL (default: http://localhost:8081)")
-    parser.add_argument("--contribution", type=float, default=10.0,
-                        help="Percent of resources to share (default: 10)")
-    parser.add_argument("--heartbeat",   type=int,   default=5,
-                        help="Heartbeat interval in seconds (default: 5)")
+    parser.add_argument("--coordinator",
+        default=os.environ.get("WWRIG_COORDINATOR", "http://localhost:8081"),
+        help="Coordinator URL")
+    parser.add_argument("--contribution", type=float,
+        default=float(os.environ.get("WWRIG_NODE_CONTRIBUTION", "10")),
+        help="Percent of resources to share (default: 10)")
+    parser.add_argument("--heartbeat", type=int,
+        default=int(os.environ.get("WWRIG_NODE_HEARTBEAT", "5")),
+        help="Heartbeat interval in seconds (default: 5)")
+    parser.add_argument("--token",
+        default=os.environ.get("WWRIG_AUTH_TOKEN", ""),
+        help="WWRIG auth token for coordinator")
     args = parser.parse_args()
 
-    # Persistent node ID
     cfg = load_config()
     if "node_id" not in cfg:
         cfg["node_id"] = str(uuid.uuid4())
@@ -213,15 +240,17 @@ def main():
 
     coordinator = args.coordinator.rstrip("/")
     hb_interval = args.heartbeat
+    token = args.token
 
     print("╔═══════════════════════════════════════════════════╗")
-    print("║       WWRIG NODE DAEMON  —  World Wide Rig v0.1   ║")
+    print("║       WWRIG NODE DAEMON  —  World Wide Rig v0.2   ║")
     print("╚═══════════════════════════════════════════════════╝")
     print(f"  Node ID      : {node_id}")
     print(f"  Hostname     : {socket.gethostname()}")
     print(f"  Coordinator  : {coordinator}")
     print(f"  Contribution : {args.contribution}% of resources")
     print(f"  Heartbeat    : every {hb_interval}s")
+    print(f"  Auth token   : {'set' if token else 'none'}")
     print()
 
     reg = build_registration(node_id, args.contribution)
@@ -238,8 +267,12 @@ def main():
         try:
             r = requests.post(
                 f"{coordinator}/api/nodes/register",
-                json=reg, timeout=5
+                json=reg, headers=api_headers(token), timeout=5
             )
+            if r.status_code == 401:
+                print(f"  [!!]  Auth rejected — check your WWRIG_AUTH_TOKEN")
+                print(f"       Token provided: {'set' if token else 'none'}")
+                sys.exit(1)
             r.raise_for_status()
             print(f"  [OK]  Registered with coordinator at {coordinator}")
             registered = True
@@ -261,12 +294,15 @@ def main():
             hb = build_heartbeat(node_id)
             r  = requests.post(
                 f"{coordinator}/api/nodes/heartbeat",
-                json=hb, timeout=5
+                json=hb, headers=api_headers(token), timeout=5
             )
-            if r.status_code == 404:
-                # Coordinator restarted — re-register
+            if r.status_code == 401:
+                print(f"\n  [!!]  Auth rejected during heartbeat — stopping.")
+                sys.exit(1)
+            elif r.status_code == 404:
                 print("  [--]  Node not found on coordinator — re-registering...")
-                requests.post(f"{coordinator}/api/nodes/register", json=reg, timeout=5)
+                requests.post(f"{coordinator}/api/nodes/register",
+                    json=reg, headers=api_headers(token), timeout=5)
             elif r.ok:
                 consecutive_failures = 0
                 print(f"  [♥]  CPU {hb['cpu_usage_pct']:.1f}%  |  "

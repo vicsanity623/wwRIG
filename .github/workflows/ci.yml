@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install flake8
+          pip install -r coordinator/requirements.txt
+          pip install -r node/requirements.txt
+      - name: Lint with flake8
+        run: |
+          flake8 coordinator/ --max-line-length=120 --ignore=E402,W503
+          flake8 node/ --max-line-length=120 --ignore=E402,W503
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r coordinator/requirements.txt
+      - name: Start coordinator
+        run: |
+          python3 coordinator/server.py &
+          sleep 3
+      - name: Test health endpoint
+        run: |
+          curl -sf http://localhost:8081/api/health || exit 1
+      - name: Test stats endpoint
+        run: |
+          curl -sf http://localhost:8081/api/stats | python3 -m json.tool || exit 1
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t wwrig-coordinator .
