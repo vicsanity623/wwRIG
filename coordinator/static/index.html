@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WWRIG // World Wide Rig</title>
+<style>
+  /* ── Fonts ── */
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:     #00ff88;
+    --green-dim: #007740;
+    --green-deep:#002211;
+    --cyan:      #00e5ff;
+    --amber:     #ff9800;
+    --red:       #ff3333;
+    --bg:        #060a06;
+    --bg-card:   #0b110b;
+    --bg-card2:  #0f160f;
+    --border:    #1a3a1a;
+    --border-hi: #00ff88;
+    --text:      #a0ffb0;
+    --text-dim:  #3a6a3a;
+    --mono:      'Share Tech Mono', monospace;
+    --display:   'Orbitron', monospace;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.06) 3px,
+      rgba(0,0,0,0.06) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 100vh;
+    padding: 0 16px 16px;
+    gap: 12px;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 0 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    color: var(--green);
+    text-shadow: 0 0 20px #00ff8855, 0 0 60px #00ff8822;
+    animation: pulse-glow 4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%,100% { text-shadow: 0 0 20px #00ff8855, 0 0 60px #00ff8822; }
+    50%      { text-shadow: 0 0 30px #00ff8888, 0 0 80px #00ff8844; }
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    letter-spacing: 1px;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green-dim);
+    flex-shrink: 0;
+  }
+  .dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 2s step-end infinite; }
+  .dot.warn { background: var(--amber); }
+  .dot.off  { background: var(--red); }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Main Grid ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 300px 1fr 280px;
+    grid-template-rows: auto 1fr;
+    gap: 10px;
+  }
+
+  /* ── Panel Base ── */
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green-dim), transparent);
+    opacity: 0.5;
+  }
+
+  .panel-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Node Cards ── */
+  .node-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .node-card {
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+    padding: 10px;
+    transition: border-color 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .node-card.online  { border-left: 2px solid var(--green); }
+  .node-card.offline { border-left: 2px solid var(--red); opacity: 0.5; }
+
+  .node-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,255,136,0.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .node-hostname {
+    font-size: 12px;
+    color: var(--green);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .node-platform {
+    font-size: 9px;
+    padding: 2px 6px;
+    background: var(--green-deep);
+    color: var(--green-dim);
+    letter-spacing: 1px;
+  }
+
+  .node-specs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .node-specs span { color: var(--text); }
+
+  .contrib-bar {
+    margin-top: 8px;
+    height: 3px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .contrib-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green-dim), var(--green));
+    transition: width 0.8s ease;
+  }
+
+  .contrib-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ── Center: Aggregate Specs ── */
+  .specs-panel {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .big-specs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .spec-block {
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+    padding: 16px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .spec-block.wide { grid-column: 1 / -1; }
+
+  .spec-block::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    background: radial-gradient(ellipse at center bottom, rgba(0,255,136,0.05) 0%, transparent 70%);
+  }
+
+  .spec-num {
+    font-family: var(--display);
+    font-size: 44px;
+    font-weight: 700;
+    color: var(--green);
+    line-height: 1;
+    text-shadow: 0 0 30px rgba(0,255,136,0.4);
+    letter-spacing: -1px;
+    transition: color 0.5s;
+  }
+
+  .spec-num.highlight { color: var(--cyan); text-shadow: 0 0 30px rgba(0,229,255,0.4); }
+
+  .spec-unit {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-left: 4px;
+    font-family: var(--mono);
+    font-weight: normal;
+  }
+
+  .spec-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .spec-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  .spec-sub span { color: var(--green-dim); }
+
+  /* Usage bars */
+  .usage-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+  }
+
+  .usage-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 40px;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  .usage-track {
+    height: 4px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .usage-fill {
+    height: 100%;
+    background: var(--green-dim);
+    transition: width 1s ease;
+  }
+
+  .usage-fill.warn  { background: var(--amber); }
+  .usage-fill.crit  { background: var(--red); }
+  .usage-fill.cyan  { background: var(--cyan); }
+
+  /* ── Right: OS Launcher ── */
+  .os-panel {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .os-card {
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .os-card:hover:not(.locked) {
+    border-color: var(--green);
+    background: #0d160d;
+  }
+
+  .os-card:hover:not(.locked)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,255,136,0.04) 0%, transparent 60%);
+  }
+
+  .os-card.locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .os-card.active-session {
+    border-color: var(--cyan);
+  }
+
+  .os-name {
+    font-family: var(--display);
+    font-size: 15px;
+    color: var(--green);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+
+  .os-card.locked .os-name { color: var(--text-dim); }
+
+  .os-desc {
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .os-badge {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 8px;
+    padding: 2px 6px;
+    letter-spacing: 1px;
+    color: var(--green-dim);
+    border: 1px solid var(--green-dim);
+  }
+
+  .os-badge.locked-badge {
+    color: var(--text-dim);
+    border-color: var(--border);
+  }
+
+  .launch-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 9px;
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .launch-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--green);
+    transform: translateX(-101%);
+    transition: transform 0.25s ease;
+    z-index: 0;
+  }
+
+  .launch-btn:hover::before { transform: translateX(0); }
+  .launch-btn:hover { color: var(--bg); }
+  .launch-btn span { position: relative; z-index: 1; }
+
+  .launch-btn:disabled {
+    border-color: var(--border);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  .launch-btn:disabled::before { display: none; }
+
+  /* Active sessions */
+  .session-item {
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--cyan);
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+
+  .session-header {
+    color: var(--cyan);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .session-link {
+    color: var(--cyan);
+    text-decoration: none;
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+
+  .session-link:hover { text-decoration: underline; }
+
+  /* ── Bottom: Console Log ── */
+  .console-panel {
+    grid-column: 1 / -1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+  }
+
+  .console-feed {
+    height: 90px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.7;
+    scrollbar-width: thin;
+    scrollbar-color: var(--green-dim) transparent;
+  }
+
+  .console-feed::-webkit-scrollbar { width: 4px; }
+  .console-feed::-webkit-scrollbar-track { background: transparent; }
+  .console-feed::-webkit-scrollbar-thumb { background: var(--green-dim); }
+
+  .log-line { display: flex; gap: 10px; }
+  .log-ts   { color: var(--text-dim); flex-shrink: 0; }
+  .log-lvl  { flex-shrink: 0; width: 48px; }
+  .log-lvl.INFO   { color: var(--green-dim); }
+  .log-lvl.WARN   { color: var(--amber); }
+  .log-lvl.ERROR  { color: var(--red); }
+  .log-lvl.LAUNCH { color: var(--cyan); }
+  .log-msg  { color: var(--text); }
+
+  /* ── Empty/loading states ── */
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    padding: 20px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-hi);
+    padding: 24px;
+    width: 440px;
+    max-width: 95vw;
+    box-shadow: 0 0 60px rgba(0,255,136,0.1);
+  }
+
+  .modal-title {
+    font-family: var(--display);
+    font-size: 16px;
+    color: var(--green);
+    letter-spacing: 3px;
+    margin-bottom: 14px;
+  }
+
+  .modal-body {
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.8;
+    margin-bottom: 18px;
+  }
+
+  .modal-spec-row {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding: 5px 0;
+  }
+
+  .modal-spec-row .key   { color: var(--text-dim); }
+  .modal-spec-row .val   { color: var(--green); font-family: var(--display); font-size: 13px; }
+
+  .modal-actions { display: flex; gap: 10px; }
+
+  .btn {
+    flex: 1;
+    padding: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    transition: all 0.2s;
+  }
+
+  .btn.primary {
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .btn.primary:hover { background: var(--green); color: var(--bg); }
+  .btn:hover { border-color: var(--text-dim); color: var(--text); }
+
+  /* ── Spinner ── */
+  .spin {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Node count badge ── */
+  .node-count {
+    font-family: var(--display);
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    margin-left: auto;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .main-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+    }
+    .specs-panel, .os-panel { grid-column: 1; grid-row: auto; }
+    .big-specs { grid-template-columns: 1fr 1fr; }
+    .spec-num  { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── Header ── -->
+  <header>
+    <div>
+      <div class="logo">WWRIG</div>
+      <div class="logo-sub">World Wide Rig &nbsp;//&nbsp; Prototype v0.1</div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill" id="coord-status">
+        <div class="dot" id="coord-dot"></div>
+        <span id="coord-label">CONNECTING...</span>
+      </div>
+      <div style="color:var(--text-dim);font-size:10px" id="clock"></div>
+    </div>
+  </header>
+
+  <!-- ── Main Grid ── -->
+  <div class="main-grid">
+
+    <!-- Left: Node List -->
+    <div class="panel" style="grid-row: 1">
+      <div class="panel-label">
+        Network Nodes
+        <div class="node-count" id="node-count">0</div>
+      </div>
+      <div class="node-list" id="node-list">
+        <div class="empty-state">Awaiting node connections...<br><br>Run <code>node/daemon.py</code><br>on each rig</div>
+      </div>
+    </div>
+
+    <!-- Left: Live Usage (below nodes) -->
+    <div class="panel" style="grid-row: 2">
+      <div class="panel-label">Live Load</div>
+      <div class="usage-bars">
+        <div class="usage-row">
+          <div>CPU</div>
+          <div class="usage-track"><div class="usage-fill" id="bar-cpu" style="width:0%"></div></div>
+          <div id="val-cpu">0%</div>
+        </div>
+        <div class="usage-row">
+          <div>RAM</div>
+          <div class="usage-track"><div class="usage-fill cyan" id="bar-ram" style="width:0%"></div></div>
+          <div id="val-ram">0%</div>
+        </div>
+        <div class="usage-row">
+          <div>GPU</div>
+          <div class="usage-track"><div class="usage-fill" id="bar-gpu" style="width:0%"></div></div>
+          <div id="val-gpu">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Aggregate Specs -->
+    <div class="specs-panel">
+      <div class="panel" style="padding:0">
+        <div style="padding:14px">
+          <div class="panel-label">wwrig Aggregate Specifications</div>
+        </div>
+        <div class="big-specs" style="padding:0 8px 8px">
+
+          <div class="spec-block">
+            <div>
+              <span class="spec-num" id="s-cores">0</span>
+              <span class="spec-unit">cores</span>
+            </div>
+            <div class="spec-label">CPU Cores (shared)</div>
+            <div class="spec-sub">Total pool: <span id="s-total-cores">0</span> cores across all nodes</div>
+          </div>
+
+          <div class="spec-block">
+            <div>
+              <span class="spec-num highlight" id="s-ram">0</span>
+              <span class="spec-unit">GB</span>
+            </div>
+            <div class="spec-label">RAM (shared)</div>
+            <div class="spec-sub">Total pool: <span id="s-total-ram">0</span>GB across all nodes</div>
+          </div>
+
+          <div class="spec-block">
+            <div>
+              <span class="spec-num" id="s-vram">0</span>
+              <span class="spec-unit">GB</span>
+            </div>
+            <div class="spec-label">VRAM (shared)</div>
+            <div class="spec-sub">Total GPU pool: <span id="s-total-vram">0</span>GB</div>
+          </div>
+
+          <div class="spec-block">
+            <div>
+              <span class="spec-num highlight" id="s-threads">0</span>
+              <span class="spec-unit">threads</span>
+            </div>
+            <div class="spec-label">CPU Threads (shared)</div>
+            <div class="spec-sub">Freq: up to <span id="s-freq">0</span>GHz</div>
+          </div>
+
+          <div class="spec-block wide">
+            <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+              <div>
+                <span class="spec-num" id="s-nodes" style="font-size:56px">0</span>
+                <span class="spec-unit">rigs online</span>
+              </div>
+              <div style="flex:1;min-width:160px">
+                <div class="spec-label" style="margin-bottom:8px">Active wwrig Contributors</div>
+                <div id="platform-tags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Sessions -->
+        <div style="padding:0 8px 8px">
+          <div class="panel-label" style="padding:0 6px 8px">Active Sessions</div>
+          <div id="session-list">
+            <div class="empty-state" style="padding:10px">No active OS sessions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: OS Launcher -->
+    <div class="os-panel">
+      <div class="panel-label">Deploy OS Session</div>
+
+      <!-- Linux -->
+      <div class="os-card" id="card-linux">
+        <div class="os-name">wwrig.linux</div>
+        <div class="os-desc">Ubuntu 22.04 LTS<br>Full desktop via browser VNC</div>
+        <div class="os-badge">AVAILABLE</div>
+        <button class="launch-btn" id="btn-linux" onclick="openLaunchModal('linux')">
+          <span>▶ Launch</span>
+        </button>
+      </div>
+
+      <!-- Windows -->
+      <div class="os-card locked" id="card-win">
+        <div class="os-name">wwrig.win64</div>
+        <div class="os-desc">Windows 11 x64<br>Requires licence key from host node</div>
+        <div class="os-badge locked-badge">COMING SOON</div>
+        <button class="launch-btn" disabled>
+          <span>▶ Launch</span>
+        </button>
+      </div>
+
+      <!-- macOS -->
+      <div class="os-card locked" id="card-macos">
+        <div class="os-name">wwrig.macOS</div>
+        <div class="os-desc">macOS Sequoia<br>Requires Apple Silicon host node</div>
+        <div class="os-badge locked-badge">COMING SOON</div>
+        <button class="launch-btn" disabled>
+          <span>▶ Launch</span>
+        </button>
+      </div>
+
+      <!-- Node setup reminder -->
+      <div style="margin-top:4px;padding:10px;border:1px solid var(--border);font-size:10px;color:var(--text-dim);line-height:1.7">
+        <div style="color:var(--green-dim);letter-spacing:1px;margin-bottom:4px">ADDING NODES</div>
+        Run <code style="color:var(--green)">python node/daemon.py</code> on any machine.<br>
+        Open <code style="color:var(--green)">android-node/index.html</code> on a phone.
+      </div>
+    </div>
+
+    <!-- Bottom: Console Log -->
+    <div class="console-panel" style="grid-column:1/-1">
+      <div class="panel-label">System Log</div>
+      <div class="console-feed" id="console-feed">
+        <div class="log-line">
+          <span class="log-ts">--:--:--</span>
+          <span class="log-lvl INFO">INFO</span>
+          <span class="log-msg">WWRIG dashboard initializing...</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+</div><!-- /shell -->
+
+<!-- ── Launch Modal ── -->
+<div class="modal-overlay" id="launch-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">LAUNCH wwrig.linux</div>
+    <div class="modal-body">
+      <p style="margin-bottom:12px;color:var(--text-dim)">
+        Allocating wwrig resources for this session. The OS will run on pooled hardware from all online nodes.
+      </p>
+      <div id="modal-specs">
+        <div class="modal-spec-row"><span class="key">vCPU</span><span class="val" id="m-vcpu">—</span></div>
+        <div class="modal-spec-row"><span class="key">RAM</span><span class="val" id="m-ram">—</span></div>
+        <div class="modal-spec-row"><span class="key">VRAM</span><span class="val" id="m-vram">—</span></div>
+        <div class="modal-spec-row"><span class="key">Nodes contributing</span><span class="val" id="m-nodes">—</span></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="modal-confirm-btn" onclick="confirmLaunch()">
+        <span>▶ CONFIRM LAUNCH</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+const API = '';   // same origin
+let currentStats  = {};
+let pendingOsType = null;
+let pollInterval  = null;
+
+// ── Clock ────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toUTCString().slice(17, 25) + ' UTC';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Number Animation ─────────────────────────────────────────────────────────
+function animateNumber(el, target, suffix = '', decimals = 0) {
+  const start = parseFloat(el.dataset.current || '0');
+  if (start === target) return;
+  const dur   = 800;
+  const begin = performance.now();
+  el.dataset.current = target;
+
+  function step(ts) {
+    const p = Math.min((ts - begin) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    const val  = start + (target - start) * ease;
+    el.textContent = decimals ? val.toFixed(decimals) : Math.round(val);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Fetch & Render Stats ──────────────────────────────────────────────────────
+async function fetchStats() {
+  try {
+    const r = await fetch(`${API}/api/stats`);
+    if (!r.ok) throw new Error(r.status);
+    const s = await r.json();
+    currentStats = s;
+    renderStats(s);
+    setCoordStatus('online');
+  } catch (e) {
+    setCoordStatus('offline');
+  }
+}
+
+function renderStats(s) {
+  animateNumber(document.getElementById('s-cores'),       s.contributed_cores,   '', 0);
+  animateNumber(document.getElementById('s-ram'),         s.contributed_ram_gb,  '', 1);
+  animateNumber(document.getElementById('s-vram'),        s.contributed_vram_gb, '', 1);
+  animateNumber(document.getElementById('s-threads'),     s.contributed_threads, '', 0);
+  animateNumber(document.getElementById('s-nodes'),       s.node_count,          '', 0);
+  document.getElementById('s-total-cores').textContent = s.total_cores;
+  document.getElementById('s-total-ram').textContent   = s.total_ram_gb + 'GB';
+  document.getElementById('s-total-vram').textContent  = s.total_vram_gb + 'GB';
+  document.getElementById('s-freq').textContent        = s.max_freq_ghz;
+  document.getElementById('node-count').textContent    = s.node_count;
+
+  // Usage bars
+  const cpu = s.avg_cpu_usage_pct || 0;
+  setBar('cpu', cpu);
+  // RAM approximate
+  const ramPct = s.total_ram_gb > 0
+    ? (s.contributed_ram_gb / s.total_ram_gb) * 100 : 0;
+  setBar('ram', ramPct);
+  setBar('gpu', 0);   // aggregate GPU load TBD
+
+  // Platform tags
+  const pt = document.getElementById('platform-tags');
+  pt.innerHTML = '';
+  (s.platforms || []).forEach(p => {
+    const el = document.createElement('div');
+    el.style.cssText = 'font-size:9px;padding:2px 8px;border:1px solid var(--green-dim);color:var(--green-dim);letter-spacing:1px';
+    el.textContent = p.toUpperCase();
+    pt.appendChild(el);
+  });
+
+  // Launch button state
+  const canLaunch = s.node_count > 0;
+  document.getElementById('btn-linux').disabled = !canLaunch;
+}
+
+function setBar(id, pct) {
+  const fill = document.getElementById('bar-' + id);
+  const val  = document.getElementById('val-' + id);
+  fill.style.width = Math.min(pct, 100) + '%';
+  fill.className = 'usage-fill' +
+    (id === 'ram' ? ' cyan' : '') +
+    (pct > 85 ? ' crit' : pct > 60 ? ' warn' : '');
+  val.textContent = Math.round(pct) + '%';
+}
+
+// ── Fetch & Render Nodes ──────────────────────────────────────────────────────
+async function fetchNodes() {
+  try {
+    const r = await fetch(`${API}/api/nodes`);
+    if (!r.ok) return;
+    const nodes = await r.json();
+    renderNodes(nodes);
+  } catch (_) {}
+}
+
+function renderNodes(nodes) {
+  const el = document.getElementById('node-list');
+  if (!nodes.length) {
+    el.innerHTML = '<div class="empty-state">No nodes connected.<br><br>Run <code>python node/daemon.py</code></div>';
+    return;
+  }
+  el.innerHTML = nodes.map(n => `
+    <div class="node-card ${n.status}">
+      <div class="node-header">
+        <div class="dot ${n.status === 'online' ? 'live' : 'off'}"></div>
+        <div class="node-hostname">${n.hostname}</div>
+        <div class="node-platform">${n.platform.toUpperCase()}</div>
+      </div>
+      <div class="node-specs">
+        <div>CPU</div><div><span>${n.cpu_cores}c/${n.cpu_threads}t @ ${n.cpu_freq_ghz}GHz</span></div>
+        <div>RAM</div><div><span>${n.ram_total_gb.toFixed(1)}GB</span></div>
+        <div>GPU</div><div><span>${n.gpu_name || 'N/A'} ${n.gpu_vram_gb ? '('+n.gpu_vram_gb+'GB)' : ''}</span></div>
+        <div>Load</div><div><span>${n.cpu_usage_pct}% CPU</span></div>
+      </div>
+      <div class="contrib-bar">
+        <div class="contrib-fill" style="width:${n.contribution_pct}%"></div>
+      </div>
+      <div class="contrib-label">
+        <span>Sharing ${n.contribution_pct}% of resources</span>
+        <span>${n.status.toUpperCase()}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Fetch & Render Sessions ───────────────────────────────────────────────────
+async function fetchSessions() {
+  try {
+    const r = await fetch(`${API}/api/vm/sessions`);
+    if (!r.ok) return;
+    const sessions = await r.json();
+    renderSessions(sessions);
+  } catch (_) {}
+}
+
+function renderSessions(sessions) {
+  const el = document.getElementById('session-list');
+  if (!sessions.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:10px">No active OS sessions</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(s => `
+    <div class="session-item">
+      <div class="session-header">
+        <span>wwrig.${s.os_type.toUpperCase()} &nbsp;·&nbsp; ID: ${s.id}</span>
+        <span style="color:${s.status==='running'||s.status.includes('running')?'var(--green)':'var(--amber)'}">${s.status}</span>
+      </div>
+      <div style="color:var(--text-dim)">
+        ${s.vcpus} vCPU &nbsp;/&nbsp; ${(s.ram_mb/1024).toFixed(1)}GB RAM
+        ${s.status.includes('running') && s.novnc_url ?
+          `&nbsp;·&nbsp; <a href="${s.novnc_url}" target="_blank" class="session-link">OPEN DISPLAY →</a>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Fetch Log ─────────────────────────────────────────────────────────────────
+async function fetchLog() {
+  try {
+    const r = await fetch(`${API}/api/log`);
+    if (!r.ok) return;
+    const lines = await r.json();
+    const feed = document.getElementById('console-feed');
+    feed.innerHTML = lines.slice(-40).map(l => {
+      const d = new Date(l.ts * 1000);
+      const t = d.toTimeString().slice(0, 8);
+      return `<div class="log-line">
+        <span class="log-ts">${t}</span>
+        <span class="log-lvl ${l.level}">${l.level}</span>
+        <span class="log-msg">${l.msg}</span>
+      </div>`;
+    }).join('');
+    feed.scrollTop = feed.scrollHeight;
+  } catch (_) {}
+}
+
+// ── Coordinator Status ────────────────────────────────────────────────────────
+function setCoordStatus(state) {
+  const dot   = document.getElementById('coord-dot');
+  const label = document.getElementById('coord-label');
+  if (state === 'online') {
+    dot.className   = 'dot live';
+    label.textContent = 'COORDINATOR ONLINE';
+  } else {
+    dot.className   = 'dot off';
+    label.textContent = 'COORDINATOR OFFLINE';
+  }
+}
+
+// ── Launch Modal ──────────────────────────────────────────────────────────────
+function openLaunchModal(osType) {
+  if (!currentStats.node_count) return;
+  pendingOsType = osType;
+
+  const s = currentStats;
+  const vcpus  = Math.max(2, Math.min(s.contributed_cores, 8));
+  const ramGb  = Math.max(2, Math.min(s.contributed_ram_gb * 0.8, 8)).toFixed(1);
+
+  document.getElementById('modal-title').textContent = `LAUNCH wwrig.${osType.toUpperCase()}`;
+  document.getElementById('m-vcpu').textContent  = vcpus + ' vCPU';
+  document.getElementById('m-ram').textContent   = ramGb + ' GB';
+  document.getElementById('m-vram').textContent  = s.contributed_vram_gb.toFixed(1) + ' GB';
+  document.getElementById('m-nodes').textContent = s.node_count;
+  document.getElementById('launch-modal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('launch-modal').classList.remove('show');
+  pendingOsType = null;
+}
+
+async function confirmLaunch() {
+  if (!pendingOsType) return;
+  const btn = document.getElementById('modal-confirm-btn');
+  btn.innerHTML = '<span class="spin"></span><span>Provisioning...</span>';
+  btn.disabled  = true;
+
+  try {
+    const r = await fetch(`${API}/api/vm/launch`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ os_type: pendingOsType })
+    });
+    const data = await r.json();
+    closeModal();
+
+    if (data.novnc_url) {
+      // Try to open noVNC — may not be running yet
+      setTimeout(() => window.open(data.novnc_url, '_blank'), 3000);
+    }
+
+    // Refresh sessions
+    await fetchSessions();
+    await fetchLog();
+  } catch (e) {
+    btn.innerHTML = '<span>ERROR — check coordinator</span>';
+    setTimeout(() => {
+      btn.innerHTML = '<span>▶ CONFIRM LAUNCH</span>';
+      btn.disabled  = false;
+    }, 2000);
+  }
+}
+
+// Close modal on overlay click
+document.getElementById('launch-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── Poll Loop ─────────────────────────────────────────────────────────────────
+async function poll() {
+  await Promise.all([fetchStats(), fetchNodes(), fetchSessions(), fetchLog()]);
+}
+
+poll();
+setInterval(poll, 2500);
+</script>
+</body>
+</html>
+
