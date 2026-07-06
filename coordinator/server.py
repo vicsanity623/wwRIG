@@ -7,7 +7,6 @@ and manages temporary OS session allocation.
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -20,6 +19,7 @@ import os
 import json
 from pathlib import Path
 
+
 # ─── Configuration ─────────────────────────────────────────────────────────
 HOST = os.getenv("WWRIG_HOST", "0.0.0.0")
 PORT = int(os.getenv("WWRIG_PORT", "8081"))
@@ -28,7 +28,6 @@ AUTH_TOKEN = os.getenv("WWRIG_AUTH_TOKEN", "")
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 
-# Auto-generate auth token if not set
 if not AUTH_TOKEN:
     token_path = PROJECT_DIR / "wwrig_config.json"
     if token_path.exists():
@@ -54,11 +53,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ─── Global State ────────────────────────────────────────────────────────────
 nodes: Dict[str, Any] = {}
 vm_sessions: Dict[str, Any] = {}
 event_log: List[Dict] = []
 NODE_TIMEOUT = 30
+
 
 def log(msg: str, level: str = "INFO"):
     entry = {"ts": round(time.time(), 2), "level": level, "msg": msg}
@@ -67,9 +68,13 @@ def log(msg: str, level: str = "INFO"):
         event_log.pop(0)
     print(f"[WWRIG/{level}] {msg}")
 
+
 def require_auth(x_wwrig_token: str = Header("")):
     if AUTH_TOKEN and x_wwrig_token != AUTH_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid or missing WWRIG auth token")
+        raise HTTPException(
+            status_code=401, detail="Invalid or missing WWRIG auth token"
+        )
+
 
 # ─── Pydantic Models ─────────────────────────────────────────────────────────
 class NodeRegistration(BaseModel):
@@ -85,18 +90,22 @@ class NodeRegistration(BaseModel):
     gpu_vram_gb: Optional[float] = 0.0
     contribution_pct: float = 10.0
 
+
 class NodeHeartbeat(BaseModel):
     node_id: str
     cpu_usage_pct: float
     ram_used_gb: float
     gpu_usage_pct: Optional[float] = 0.0
 
+
 class VMRequest(BaseModel):
     os_type: str
+
 
 class ContributionUpdate(BaseModel):
     node_id: str
     contribution_pct: float
+
 
 # ─── Health ──────────────────────────────────────────────────────────────────
 @app.get("/api/health")
@@ -107,6 +116,7 @@ async def health():
         "node_count": len(nodes),
         "auth_required": bool(AUTH_TOKEN),
     }
+
 
 # ─── Node Endpoints ──────────────────────────────────────────────────────────
 @app.post("/api/nodes/register")
@@ -125,16 +135,22 @@ async def register_node(reg: NodeRegistration, x_wwrig_token: str = Header("")):
     action = "JOINED" if is_new else "RECONNECTED"
     log(f"NODE {action}: {reg.hostname} [{reg.platform.upper()}] — "
         f"{reg.cpu_cores}c/{reg.cpu_threads}t @ {reg.cpu_freq_ghz}GHz | "
-        f"{reg.ram_total_gb:.1f}GB RAM | GPU: {reg.gpu_name} ({reg.gpu_vram_gb:.1f}GB) | "
-        f"Sharing: {reg.contribution_pct:.0f}%")
-    return {"status": "registered", "node_id": reg.node_id, "auth_required": bool(AUTH_TOKEN)}
+        f"{reg.ram_total_gb:.1f}GB RAM | GPU: {reg.gpu_name} "
+        f"({reg.gpu_vram_gb:.1f}GB) | Sharing: {reg.contribution_pct:.0f}%")
+    return {
+        "status": "registered",
+        "node_id": reg.node_id,
+        "auth_required": bool(AUTH_TOKEN),
+    }
 
 
 @app.post("/api/nodes/heartbeat")
 async def heartbeat(hb: NodeHeartbeat, x_wwrig_token: str = Header("")):
     require_auth(x_wwrig_token)
     if hb.node_id not in nodes:
-        raise HTTPException(status_code=404, detail="Node not registered. Please re-register.")
+        raise HTTPException(
+            status_code=404, detail="Node not registered. Please re-register."
+        )
     nodes[hb.node_id].update({
         "last_seen": time.time(),
         "status": "online",
@@ -159,12 +175,16 @@ async def list_nodes():
 
 
 @app.post("/api/nodes/contribution")
-async def update_contribution(update: ContributionUpdate, x_wwrig_token: str = Header("")):
+async def update_contribution(
+    update: ContributionUpdate, x_wwrig_token: str = Header("")
+):
     require_auth(x_wwrig_token)
     if update.node_id not in nodes:
         raise HTTPException(status_code=404, detail="Node not found")
     old = nodes[update.node_id]["contribution_pct"]
-    nodes[update.node_id]["contribution_pct"] = max(1.0, min(100.0, update.contribution_pct))
+    nodes[update.node_id]["contribution_pct"] = max(
+        1.0, min(100.0, update.contribution_pct)
+    )
     log(f"CONTRIBUTION UPDATED: {nodes[update.node_id]['hostname']} "
         f"{old:.0f}% → {update.contribution_pct:.0f}%")
     return {"status": "ok"}
@@ -174,7 +194,9 @@ async def update_contribution(update: ContributionUpdate, x_wwrig_token: str = H
 @app.get("/api/stats")
 async def aggregate_stats():
     now = time.time()
-    active = [n for n in nodes.values() if (now - n["last_seen"]) < NODE_TIMEOUT]
+    active = [
+        n for n in nodes.values() if (now - n["last_seen"]) < NODE_TIMEOUT
+    ]
 
     if not active:
         return {
@@ -192,36 +214,39 @@ async def aggregate_stats():
             "platforms": [],
         }
 
-    total_cores   = sum(n["cpu_cores"] for n in active)
+    total_cores = sum(n["cpu_cores"] for n in active)
     total_threads = sum(n["cpu_threads"] for n in active)
-    total_ram     = sum(n["ram_total_gb"] for n in active)
-    total_vram    = sum(n.get("gpu_vram_gb") or 0 for n in active)
-    max_freq      = max(n["cpu_freq_ghz"] for n in active)
-    avg_cpu       = sum(n["cpu_usage_pct"] for n in active) / len(active)
+    total_ram = sum(n["ram_total_gb"] for n in active)
+    total_vram = sum(n.get("gpu_vram_gb") or 0 for n in active)
+    max_freq = max(n["cpu_freq_ghz"] for n in active)
+    avg_cpu = sum(n["cpu_usage_pct"] for n in active) / len(active)
 
     def contrib(n, field, is_int=False):
         pct = n["contribution_pct"] / 100
         val = n[field] * pct
         return int(val) if is_int else val
 
-    cont_cores   = sum(contrib(n, "cpu_cores",   is_int=True) for n in active)
+    cont_cores = sum(contrib(n, "cpu_cores", is_int=True) for n in active)
     cont_threads = sum(contrib(n, "cpu_threads", is_int=True) for n in active)
-    cont_ram     = sum(contrib(n, "ram_total_gb") for n in active)
-    cont_vram    = sum((n.get("gpu_vram_gb") or 0) * n["contribution_pct"] / 100 for n in active)
+    cont_ram = sum(contrib(n, "ram_total_gb") for n in active)
+    cont_vram = sum(
+        (n.get("gpu_vram_gb") or 0) * n["contribution_pct"] / 100
+        for n in active
+    )
 
     return {
-        "node_count":          len(active),
-        "total_cores":         total_cores,
-        "total_threads":       total_threads,
-        "max_freq_ghz":        round(max_freq, 2),
-        "total_ram_gb":        round(total_ram, 1),
-        "total_vram_gb":       round(total_vram, 1),
-        "contributed_cores":   cont_cores,
+        "node_count": len(active),
+        "total_cores": total_cores,
+        "total_threads": total_threads,
+        "max_freq_ghz": round(max_freq, 2),
+        "total_ram_gb": round(total_ram, 1),
+        "total_vram_gb": round(total_vram, 1),
+        "contributed_cores": cont_cores,
         "contributed_threads": cont_threads,
-        "contributed_ram_gb":  round(cont_ram, 2),
+        "contributed_ram_gb": round(cont_ram, 2),
         "contributed_vram_gb": round(cont_vram, 2),
-        "avg_cpu_usage_pct":   round(avg_cpu, 1),
-        "platforms":           list({n["platform"] for n in active}),
+        "avg_cpu_usage_pct": round(avg_cpu, 1),
+        "platforms": list({n["platform"] for n in active}),
     }
 
 
@@ -231,39 +256,47 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
     stats = await aggregate_stats()
 
     if stats["node_count"] == 0:
-        raise HTTPException(status_code=503, detail="No WWRIG nodes online. Start a node daemon first.")
+        raise HTTPException(
+            status_code=503,
+            detail="No WWRIG nodes online. Start a node daemon first."
+        )
 
-    vm_id    = str(uuid.uuid4())[:8].upper()
+    vm_id = str(uuid.uuid4())[:8].upper()
     vnc_port = 5900 + len(vm_sessions)
-    ws_port  = vnc_port + 100
+    ws_port = vnc_port + 100
 
-    vcpus  = max(2, min(stats["contributed_cores"], 8))
+    vcpus = max(2, min(stats["contributed_cores"], 8))
     ram_mb = max(2048, min(int(stats["contributed_ram_gb"] * 1024), 8192))
 
     vm_sessions[vm_id] = {
-        "id":       vm_id,
-        "os_type":  req.os_type,
-        "vcpus":    vcpus,
-        "ram_mb":   ram_mb,
+        "id": vm_id,
+        "os_type": req.os_type,
+        "vcpus": vcpus,
+        "ram_mb": ram_mb,
         "vnc_port": vnc_port,
-        "ws_port":  ws_port,
-        "status":   "provisioning",
-        "started":  time.time(),
-        "pid":      None,
+        "ws_port": ws_port,
+        "status": "provisioning",
+        "started": time.time(),
+        "pid": None,
     }
 
     log(f"SESSION PROVISIONING: wwrig.{req.os_type.upper()} ID={vm_id} "
         f"— {vcpus} vCPU / {ram_mb}MB RAM / VNC:{vnc_port}", "LAUNCH")
 
-    background_tasks.add_task(_start_vm, vm_id, req.os_type, vcpus, ram_mb, vnc_port)
+    background_tasks.add_task(
+        _start_vm, vm_id, req.os_type, vcpus, ram_mb, vnc_port
+    )
     return {
-        "vm_id":      vm_id,
-        "status":     "provisioning",
-        "vcpus":      vcpus,
-        "ram_mb":     ram_mb,
-        "vnc_port":   vnc_port,
-        "novnc_url":  f"http://localhost:{ws_port}/vnc.html?autoconnect=true&resize=scale",
-        "message":    f"wwrig.{req.os_type} session {vm_id} is provisioning..."
+        "vm_id": vm_id,
+        "status": "provisioning",
+        "vcpus": vcpus,
+        "ram_mb": ram_mb,
+        "vnc_port": vnc_port,
+        "novnc_url": (
+            f"http://localhost:{ws_port}/vnc.html"
+            "?autoconnect=true&resize=scale"
+        ),
+        "message": f"wwrig.{req.os_type} session {vm_id} is provisioning...",
     }
 
 
@@ -287,17 +320,19 @@ async def terminate_session(vm_id: str):
     return {"status": "terminated"}
 
 
-async def _start_vm(vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port: int):
+async def _start_vm(vm_id: str, os_type: str, vcpus: int,
+                     ram_mb: int, vnc_port: int):
     """Invoke the vm/launch.sh script (QEMU + noVNC)"""
     script = PROJECT_DIR / "vm" / "launch.sh"
     if script.exists():
         try:
             proc = subprocess.Popen(
-                ["bash", str(script), os_type, str(vcpus), str(ram_mb), str(vnc_port)],
+                ["bash", str(script), os_type, str(vcpus),
+                 str(ram_mb), str(vnc_port)],
                 stdout=open(f"/tmp/wwrig_vm_{vm_id}.log", "w"),
                 stderr=subprocess.STDOUT,
             )
-            vm_sessions[vm_id]["pid"]    = proc.pid
+            vm_sessions[vm_id]["pid"] = proc.pid
             vm_sessions[vm_id]["status"] = "running"
             log(f"SESSION RUNNING: {vm_id} PID={proc.pid}")
         except Exception as e:
@@ -306,7 +341,8 @@ async def _start_vm(vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port:
     else:
         await asyncio.sleep(3)
         vm_sessions[vm_id]["status"] = "running (demo)"
-        log(f"SESSION DEMO: {vm_id} — vm/launch.sh not found, running in display-only mode", "WARN")
+        log(f"SESSION DEMO: {vm_id} — vm/launch.sh not found, "
+            "running in display-only mode", "WARN")
 
 
 # ─── Log Endpoint ─────────────────────────────────────────────────────────────
@@ -331,15 +367,16 @@ async def startup():
 
 
 async def _node_watchdog():
-    """Periodically mark stale nodes offline and prune them"""
     while True:
         await asyncio.sleep(15)
         now = time.time()
         for node_id in list(nodes.keys()):
             last = nodes[node_id]["last_seen"]
-            if (now - last) > NODE_TIMEOUT and nodes[node_id]["status"] == "online":
+            if ((now - last) > NODE_TIMEOUT
+                    and nodes[node_id]["status"] == "online"):
                 nodes[node_id]["status"] = "offline"
-                log(f"NODE OFFLINE: {nodes[node_id]['hostname']} (no heartbeat for {int(now-last)}s)", "WARN")
+                log(f"NODE OFFLINE: {nodes[node_id]['hostname']} "
+                    f"(no heartbeat for {int(now - last)}s)", "WARN")
 
 
 # ─── Static Serve (must be last) ─────────────────────────────────────────────
@@ -348,4 +385,5 @@ static_dir.mkdir(exist_ok=True)
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host=HOST, port=PORT, reload=False, log_level="warning")
+    uvicorn.run("server:app", host=HOST, port=PORT, reload=False,
+                log_level="warning")
