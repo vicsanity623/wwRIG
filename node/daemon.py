@@ -6,7 +6,7 @@ sends heartbeats to the WWRIG Coordinator.
 
 Usage:
     python daemon.py                           # auto-detect coordinator on localhost
-    python daemon.py --coordinator http://192.168.1.100:8080
+    python daemon.py --coordinator http://192.168.1.100:8081
     python daemon.py --contribution 15         # share 15% of resources (default: 10)
 """
 
@@ -196,8 +196,8 @@ def build_heartbeat(node_id: str) -> dict:
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="WWRIG Node Daemon")
-    parser.add_argument("--coordinator", default="http://localhost:8080",
-                        help="Coordinator URL (default: http://localhost:8080)")
+    parser.add_argument("--coordinator", default="http://localhost:8081",
+                        help="Coordinator URL (default: http://localhost:8081)")
     parser.add_argument("--contribution", type=float, default=10.0,
                         help="Percent of resources to share (default: 10)")
     parser.add_argument("--heartbeat",   type=int,   default=5,

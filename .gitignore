@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+
+# Virtual environment
+.wwrig/
+
+# Runtime files
+*.log
+*.pid
+.DS_Store
+node/node_config.json
+coordinator/static/mobile.html
+wwrig_config.json
+
+# QEMU / VM images
+vm/images/*.iso
+vm/images/*.qcow2
+vm/logs/*
+
+# Editor / OS
+*.swp
+*.swo
+*~
+.DS_Store

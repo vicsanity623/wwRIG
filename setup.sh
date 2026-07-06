@@ -102,7 +102,7 @@ if [ "$MODE" = "all" ] || [ "$MODE" = "coordinator" ]; then
   pkill -f "coordinator/server.py" 2>/dev/null || true
   sleep 0.5
 
-  echo -e "${CYAN}  Starting WWRIG Coordinator on port 8080...${NC}"
+  echo -e "${CYAN}  Starting WWRIG Coordinator on port 8081...${NC}"
   cd "$WWRIG_DIR/coordinator"
   nohup python3 server.py > "$WWRIG_DIR/coordinator.log" 2>&1 &
   COORD_PID=$!
@@ -110,7 +110,7 @@ if [ "$MODE" = "all" ] || [ "$MODE" = "coordinator" ]; then
 
   # Wait for coordinator to be ready
   for i in $(seq 1 15); do
-    if curl -s "http://localhost:8080/api/stats" &>/dev/null; then
+    if curl -s "http://localhost:8081/api/stats" &>/dev/null; then
       echo "  [OK] Coordinator online (PID $COORD_PID)"
       break
     fi
@@ -127,7 +127,7 @@ if [ "$MODE" = "all" ] || [ "$MODE" = "node" ]; then
 
   echo -e "${CYAN}  Starting node daemon (this machine contributes 10%)...${NC}"
   nohup python3 "$WWRIG_DIR/node/daemon.py" \
-    --coordinator "http://localhost:8080" \
+    --coordinator "http://localhost:8081" \
     --contribution 10 \
     > "$WWRIG_DIR/node.log" 2>&1 &
   NODE_PID=$!
@@ -137,9 +137,17 @@ if [ "$MODE" = "all" ] || [ "$MODE" = "node" ]; then
 fi
 
 # ── Serve android node page ───────────────────────────────────────────────────
-# The android-node/index.html is served from the coordinator's static dir via symlink
-if [ ! -f "$WWRIG_DIR/coordinator/static/mobile.html" ]; then
-  cp "$WWRIG_DIR/android-node/index.html" "$WWRIG_DIR/coordinator/static/mobile.html"
+cp "$WWRIG_DIR/android-node/index.html" "$WWRIG_DIR/coordinator/static/mobile.html"
+
+# ── Install SwiftBar / xBar menu bar plugin ───────────────────────────────────
+SWIFTBAR_DIR="$HOME/Library/Application Support/com.ameba.SwiftBar/plugins"
+XBAR_DIR="$HOME/Library/Application Support/xbar/plugins"
+if [ -d "$SWIFTBAR_DIR" ]; then
+  cp "$WWRIG_DIR/scripts/wwrig.10s.py" "$SWIFTBAR_DIR/wwrig.10s.py"
+  echo "  [OK] SwiftBar plugin installed"
+elif [ -d "$XBAR_DIR" ]; then
+  cp "$WWRIG_DIR/scripts/wwrig.10s.py" "$XBAR_DIR/wwrig.10s.py"
+  echo "  [OK] xBar plugin installed"
 fi
 
 echo ""
@@ -147,15 +155,14 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║                 WWRIG IS LIVE                         ║${NC}"
 echo -e "${GREEN}╠═══════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                                       ║${NC}"
-echo -e "${GREEN}║  Dashboard   : http://localhost:8080                  ║${NC}"
-echo -e "${GREEN}║  On your LAN : http://${LOCAL_IP}:8080           ║${NC}"
-echo -e "${GREEN}║                                                       ║${NC}"
-echo -e "${GREEN}║  Mobile Node : http://${LOCAL_IP}:8080/mobile.html ║${NC}"
+echo -e "${GREEN}║  Dashboard   : http://localhost:8081                  ║${NC}"
+echo -e "${GREEN}║  On your LAN : http://${LOCAL_IP}:8081           ║${NC}"
+echo -e "${GREEN}║  Mobile Node : http://${LOCAL_IP}:8081/mobile.html ║${NC}"
 echo -e "${GREEN}║  (Open this URL on your Android phone)               ║${NC}"
 echo -e "${GREEN}║                                                       ║${NC}"
 echo -e "${GREEN}║  Add more nodes (other machines):                    ║${NC}"
 echo -e "${GREEN}║  python3 node/daemon.py \\                            ║${NC}"
-echo -e "${GREEN}║    --coordinator http://${LOCAL_IP}:8080        ║${NC}"
+echo -e "${GREEN}║    --coordinator http://${LOCAL_IP}:8081        ║${NC}"
 echo -e "${GREEN}║                                                       ║${NC}"
 echo -e "${GREEN}║  Stop all:  bash setup.sh stop                       ║${NC}"
 echo -e "${GREEN}║  Logs:      tail -f coordinator.log                  ║${NC}"

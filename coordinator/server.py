@@ -283,7 +283,7 @@ async def get_log(limit: int = 60):
 async def startup():
     log("═══════════════════════════════════════════════")
     log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.1")
-    log("  Listening on 0.0.0.0:8080")
+    log("  Listening on 0.0.0.0:8081")
     log("═══════════════════════════════════════════════")
     asyncio.create_task(_node_watchdog())
 
@@ -306,5 +306,5 @@ static_dir.mkdir(exist_ok=True)
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=False, log_level="warning")
+    uvicorn.run("server:app", host="0.0.0.0", port=8081, reload=False, log_level="warning")
 

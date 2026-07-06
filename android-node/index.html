@@ -1,1 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>WWRIG // Mobile Node</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--green:#00ff88;--green-dim:#007740;--green-deep:#002211;--cyan:#00e5ff;--amber:#ff9800;--red:#ff3333;--bg:#060a06;--bg-card:#0b110b;--bg-card2:#0f160f;--border:#1a3a1a;--border-hi:#00ff88;--text:#a0ffb0;--text-dim:#3a6a3a;--mono:'Share Tech Mono',monospace;--display:'Orbitron',monospace}
+  html,body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;line-height:1.5;min-height:100vh;overflow-x:hidden;-webkit-text-size-adjust:100%}
+  body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px);pointer-events:none;z-index:9999}
+  .shell{display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;padding:0 12px 12px;gap:10px}
+  header{border-bottom:1px solid var(--border);padding:10px 0 8px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .logo{font-family:var(--display);font-size:22px;font-weight:900;letter-spacing:4px;color:var(--green);text-shadow:0 0 20px #00ff8855,0 0 60px #00ff8822;animation:pulse-glow 4s ease-in-out infinite}
+  @keyframes pulse-glow{0%,100%{text-shadow:0 0 20px #00ff8855,0 0 60px #00ff8822}50%{text-shadow:0 0 30px #00ff8888,0 0 80px #00ff8844}}
+  .logo-sub{font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase}
+  .status-bar{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:10px;color:var(--text-dim)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green-dim);flex-shrink:0}
+  .dot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s step-end infinite}
+  .dot.off{background:var(--red)}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+  .panel{background:var(--bg-card);border:1px solid var(--border);padding:12px;position:relative;overflow:hidden}
+  .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--green-dim),transparent);opacity:0.5}
+  .panel-label{font-size:9px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .panel-label::after{content:'';flex:1;height:1px;background:var(--border)}
+  input{width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;border-radius:0}
+  input:focus{border-color:var(--green)}
+  input::placeholder{color:var(--text-dim);opacity:0.5}
+  .btn{width:100%;padding:12px;font-family:var(--mono);font-size:12px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-dim);transition:all 0.2s;text-align:center;-webkit-appearance:none;border-radius:0}
+  .btn.primary{border-color:var(--green);color:var(--green)}
+  .btn.primary:hover:not(:disabled){background:var(--green);color:var(--bg)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  .btn.danger{border-color:var(--red);color:var(--red)}
+  .btn.danger:hover:not(:disabled){background:var(--red);color:var(--bg)}
+  .spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .spec-item{background:var(--bg-card2);border:1px solid var(--border);padding:10px;text-align:center}
+  .spec-num{font-family:var(--display);font-size:28px;font-weight:700;color:var(--green);line-height:1;text-shadow:0 0 20px rgba(0,255,136,0.3)}
+  .spec-label{font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;margin-top:4px}
+  .status-msg{padding:8px;font-size:11px;text-align:center;border:1px solid var(--border)}
+  .status-msg.connected{border-color:var(--green);color:var(--green)}
+  .status-msg.error{border-color:var(--red);color:var(--red)}
+  .status-msg.waiting{border-color:var(--amber);color:var(--amber)}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hb-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);padding:6px 0;border-bottom:1px solid var(--border)}
+  .hb-row:last-child{border-bottom:none}
+  .hb-row span{color:var(--text)}
+  .section{margin-bottom:10px}
+  .device-info{font-size:11px;color:var(--text-dim);line-height:1.8}
+  .device-info span{color:var(--text)}
+  .pool-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:6px}
+  .pool-stat{text-align:center;padding:6px;background:var(--bg-card2);border:1px solid var(--border)}
+  .pool-num{font-family:var(--display);font-size:18px;color:var(--cyan);text-shadow:0 0 15px rgba(0,229,255,0.3)}
+  .pool-label{font-size:7px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase;margin-top:2px}
+  .node-id{font-size:8px;color:var(--text-dim);word-break:break-all;margin-top:4px;padding:4px;background:var(--bg);border:1px solid var(--border);text-align:center}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <div class="logo">WWRIG</div>
+      <div class="logo-sub">Mobile Node</div>
+    </div>
+    <div class="status-bar">
+      <div class="dot off" id="status-dot"></div>
+      <span id="status-label">DISCONNECTED</span>
+    </div>
+  </header>
 
+  <!-- Connect Panel -->
+  <div class="panel" id="connect-panel">
+    <div class="panel-label">Connect to Coordinator</div>
+    <div class="section">
+      <input type="text" id="coord-url" placeholder="http://192.168.0.11:8081" autocomplete="url">
+    </div>
+    <div class="section" style="display:flex;gap:8px">
+      <button class="btn primary" id="btn-connect" onclick="connect()">▶ Connect to WWRIG</button>
+    </div>
+    <div id="connect-status" class="status-msg waiting hidden">Enter coordinator URL and tap Connect</div>
+  </div>
+
+  <!-- Node Panel (shown after connect) -->
+  <div class="panel hidden" id="node-panel">
+    <div class="panel-label">Your Device</div>
+    <div class="device-info" id="device-info"></div>
+    <div class="node-id" id="node-id-display"></div>
+  </div>
+
+  <!-- Stats Panel -->
+  <div class="panel hidden" id="stats-panel">
+    <div class="panel-label">WWRIG Pool</div>
+    <div class="pool-stats" id="pool-stats">
+      <div class="pool-stat"><div class="pool-num" id="pool-nodes">0</div><div class="pool-label">Nodes</div></div>
+      <div class="pool-stat"><div class="pool-num" id="pool-cores">0</div><div class="pool-label">Cores</div></div>
+      <div class="pool-stat"><div class="pool-num" id="pool-ram">0</div><div class="pool-label">RAM GB</div></div>
+    </div>
+  </div>
+
+  <!-- Heartbeat Panel -->
+  <div class="panel hidden" id="hb-panel">
+    <div class="panel-label">Live Telemetry</div>
+    <div id="hb-data">
+      <div class="hb-row">CPU Load <span id="hb-cpu">—</span></div>
+      <div class="hb-row">RAM Used <span id="hb-ram">—</span></div>
+      <div class="hb-row">Battery <span id="hb-battery">—</span></div>
+    </div>
+    <div style="margin-top:8px">
+      <button class="btn danger" onclick="disconnect()">⏻ Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="font-size:8px;color:var(--text-dim);text-align:center;padding:8px 0">
+    WWRIG v0.1 &nbsp;//&nbsp; World Wide Rig
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let nodeId = localStorage.getItem('wwrig_node_id');
+if (!nodeId) {
+  // crypto.randomUUID() needs HTTPS — use fallback for HTTP pages
+  function randomId() {
+    try { return crypto.randomUUID().slice(0,8); } catch(_) {}
+    return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+  }
+  nodeId = 'phone-' + randomId();
+  localStorage.setItem('wwrig_node_id', nodeId);
+}
+
+let coordinatorUrl = localStorage.getItem('wwrig_coordinator');
+let connected = false;
+let hbInterval = null;
+let statsInterval = null;
+let registered = false;
+
+// Cross-browser fetch with timeout (AbortSignal.timeout not available everywhere)
+function fetchWithTimeout(url, opts, ms) {
+  const ctrl = new AbortController();
+  const id = setTimeout(function(){ ctrl.abort(); }, ms);
+  return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+    .then(function(r) { clearTimeout(id); return r; })
+    .catch(function(e) { clearTimeout(id); throw e; });
+}
+
+// Pre-fill coordinator URL from page origin or localStorage
+function init() {
+  const input = document.getElementById('coord-url');
+  if (coordinatorUrl) {
+    input.value = coordinatorUrl;
+  } else {
+    // Derive from page URL if on the coordinator
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && !origin.includes('localhost')) {
+      input.value = origin;
+    }
+  }
+  document.getElementById('node-id-display').textContent = 'Node ID: ' + nodeId;
+}
+init();
+
+// ── Device Detection ──────────────────────────────────────────────────────────
+async function detectDevice() {
+  const info = {
+    hostname: navigator.platform || 'Android Device',
+    platform: /android/i.test(navigator.userAgent) ? 'android' : 'web',
+    cpuBrand: navigator.platform || 'Unknown',
+    cpuCores: navigator.hardwareConcurrency || 2,
+    cpuThreads: navigator.hardwareConcurrency || 2,
+    cpuFreqGhz: 0.0,
+    ramTotalGb: navigator.deviceMemory || 2,
+    gpuName: navigator.gpu ? 'WebGPU Device' : 'N/A',
+    gpuVramGb: 0.0,
+    contributionPct: 10,
+  };
+
+  // Battery info
+  try {
+    const battery = await navigator.getBattery();
+    info.batteryLevel = battery.level * 100;
+    info.batteryCharging = battery.charging;
+  } catch (_) {
+    info.batteryLevel = null;
+    info.batteryCharging = null;
+  }
+
+  return info;
+}
+
+function renderDeviceInfo(info) {
+  const el = document.getElementById('device-info');
+  const batteryStr = info.batteryLevel !== null
+    ? `${Math.round(info.batteryLevel)}% ${info.batteryCharging ? '⚡charging' : 'discharging'}`
+    : 'N/A';
+  el.innerHTML = `
+    ${info.cpuCores} logical cores &nbsp;·&nbsp; ~${info.ramTotalGb}GB RAM<br>
+    Battery: ${batteryStr}
+  `;
+}
+
+// ── Connect ────────────────────────────────────────────────────────────────────
+async function connect() {
+  const input = document.getElementById('coord-url');
+  let url = input.value.trim();
+  if (!url) {
+    showStatus('Enter the coordinator URL (e.g. http://192.168.0.11:8081)', 'error');
+    return;
+  }
+  url = url.replace(/\/+$/, '');
+  coordinatorUrl = url;
+  localStorage.setItem('wwrig_coordinator', url);
+
+  const btn = document.getElementById('btn-connect');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Connecting...';
+  showStatus('Connecting to coordinator...', 'waiting');
+
+  try {
+    // Test connection
+    const test = await fetchWithTimeout(`${coordinatorUrl}/api/stats`, {}, 5000);
+    if (!test.ok) throw new Error('Status: ' + test.status);
+
+    // Detect device
+    const device = await detectDevice();
+    renderDeviceInfo(device);
+
+    // Register
+    const regPayload = {
+      node_id: nodeId,
+      hostname: device.hostname,
+      platform: device.platform,
+      cpu_brand: device.cpuBrand,
+      cpu_cores: device.cpuCores,
+      cpu_threads: device.cpuThreads,
+      cpu_freq_ghz: device.cpuFreqGhz,
+      ram_total_gb: device.ramTotalGb,
+      gpu_name: device.gpuName,
+      gpu_vram_gb: device.gpuVramGb,
+      contribution_pct: device.contributionPct,
+    };
+
+    const reg = await fetchWithTimeout(`${coordinatorUrl}/api/nodes/register`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(regPayload),
+    }, 5000);
+    if (!reg.ok) throw new Error('Registration failed: ' + (await reg.text()));
+    registered = true;
+
+    connected = true;
+    showStatus('Connected! Sending heartbeats...', 'connected');
+    setStatusLED('live');
+
+    // Show panels
+    document.getElementById('connect-panel').classList.add('hidden');
+    document.getElementById('node-panel').classList.remove('hidden');
+    document.getElementById('stats-panel').classList.remove('hidden');
+    document.getElementById('hb-panel').classList.remove('hidden');
+
+    // Start heartbeats
+    if (hbInterval) clearInterval(hbInterval);
+    hbInterval = setInterval(sendHeartbeat, 5000);
+    sendHeartbeat();
+
+    // Start stats polling
+    if (statsInterval) clearInterval(statsInterval);
+    statsInterval = setInterval(fetchStats, 3000);
+    fetchStats();
+
+  } catch (e) {
+    showStatus('Connection failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '▶ Connect to WWRIG';
+  }
+}
+
+// ── Heartbeat ──────────────────────────────────────────────────────────────────
+async function sendHeartbeat() {
+  if (!connected) return;
+  try {
+    const vm = navigator?.deviceMemory ? { total: navigator.deviceMemory * 1073741824, available: 0 } : null;
+    // Estimate used RAM as percentage of deviceMemory
+    const usedGb = vm ? (navigator.deviceMemory || 2) * 0.6 : 1;
+    const cpuPct = 0; // No reliable CPU API in browser
+
+    const hbPayload = {
+      node_id: nodeId,
+      cpu_usage_pct: cpuPct,
+      ram_used_gb: usedGb,
+      gpu_usage_pct: 0,
+    };
+
+    const r = await fetchWithTimeout(`${coordinatorUrl}/api/nodes/heartbeat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(hbPayload),
+    }, 3000);
+
+    if (r.status === 404) {
+      // Re-register
+      const device = await detectDevice();
+      await fetchWithTimeout(`${coordinatorUrl}/api/nodes/register`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          node_id: nodeId, hostname: device.hostname, platform: device.platform,
+          cpu_brand: device.cpuBrand, cpu_cores: device.cpuCores,
+          cpu_threads: device.cpuThreads, cpu_freq_ghz: device.cpuFreqGhz,
+          ram_total_gb: device.ramTotalGb, gpu_name: device.gpuName,
+          gpu_vram_gb: device.gpuVramGb, contribution_pct: device.contributionPct,
+        }),
+      }, 5000);
+    }
+
+    // Update UI
+    document.getElementById('hb-cpu').textContent = cpuPct.toFixed(0) + '%';
+    document.getElementById('hb-ram').textContent = usedGb.toFixed(1) + 'GB';
+
+    try {
+      const battery = await navigator.getBattery();
+      document.getElementById('hb-battery').textContent =
+        Math.round(battery.level * 100) + '% ' + (battery.charging ? '⚡' : '');
+    } catch (_) {}
+
+  } catch (e) {
+    // Silently retry
+  }
+}
+
+// ── Fetch Pool Stats ───────────────────────────────────────────────────────────
+async function fetchStats() {
+  if (!connected) return;
+  try {
+    const r = await fetchWithTimeout(`${coordinatorUrl}/api/stats`, {}, 3000);
+    if (!r.ok) return;
+    const s = await r.json();
+    document.getElementById('pool-nodes').textContent = s.node_count || 0;
+    document.getElementById('pool-cores').textContent = s.contributed_cores || 0;
+    document.getElementById('pool-ram').textContent = (s.contributed_ram_gb || 0).toFixed(1);
+  } catch (_) {}
+}
+
+// ── Disconnect ─────────────────────────────────────────────────────────────────
+function disconnect() {
+  connected = false;
+  registered = false;
+  if (hbInterval) { clearInterval(hbInterval); hbInterval = null; }
+  if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
+
+  setStatusLED('off');
+  document.getElementById('status-label').textContent = 'DISCONNECTED';
+
+  document.getElementById('connect-panel').classList.remove('hidden');
+  document.getElementById('node-panel').classList.add('hidden');
+  document.getElementById('stats-panel').classList.add('hidden');
+  document.getElementById('hb-panel').classList.add('hidden');
+
+  const btn = document.getElementById('btn-connect');
+  btn.disabled = false;
+  btn.innerHTML = '▶ Connect to WWRIG';
+}
+
+// ── UI Helpers ─────────────────────────────────────────────────────────────────
+function showStatus(msg, type) {
+  const el = document.getElementById('connect-status');
+  el.classList.remove('hidden', 'connected', 'error', 'waiting');
+  el.classList.add(type);
+  el.textContent = msg;
+}
+
+function setStatusLED(state) {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  dot.className = 'dot ' + (state === 'live' ? 'live' : 'off');
+  label.textContent = state === 'live' ? 'CONNECTED' : 'DISCONNECTED';
+}
+</script>
+</body>
+</html>

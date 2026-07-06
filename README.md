@@ -29,7 +29,7 @@ bash scripts/check_system.sh
 bash setup.sh
 
 # 4. Open the dashboard
-open http://localhost:8080
+open http://localhost:8081
 ```
 
 That's it. The coordinator starts, your iMac registers as a node, and the dashboard goes live.
@@ -42,9 +42,9 @@ That's it. The coordinator starts, your iMac registers as a node, and the dashbo
 2. Find your iMac's local IP (shown in the setup output, or run `ipconfig getifaddr en0`).
 3. On your phone, open a browser and go to:
    ```
-   http://YOUR_IMAC_IP:8080/mobile.html
+   http://YOUR_IMAC_IP:8081/mobile.html
    ```
-4. Enter the coordinator URL (`http://YOUR_IMAC_IP:8080`) and tap **Connect to WWRIG**.
+4. Enter the coordinator URL (`http://YOUR_IMAC_IP:8081`) and tap **Connect to WWRIG**.
 5. Your phone appears as a node in the dashboard immediately.
 
 ---
@@ -69,7 +69,7 @@ That's it. The coordinator starts, your iMac registers as a node, and the dashbo
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                   WWRIG COORDINATOR                          │
-│              FastAPI  ·  port 8080                           │
+│              FastAPI  ·  port 8081                           │
 │                                                              │
 │  /api/nodes/register   ← nodes announce themselves          │
 │  /api/nodes/heartbeat  ← nodes send live usage every 5s     │
@@ -135,13 +135,13 @@ Any machine on your LAN (or the internet with port forwarding):
 
 ```bash
 # On another Mac
-python3 node/daemon.py --coordinator http://YOUR_IMAC_IP:8080 --contribution 15
+python3 node/daemon.py --coordinator http://YOUR_IMAC_IP:8081 --contribution 15
 
 # On a Linux box
-python3 node/daemon.py --coordinator http://YOUR_IMAC_IP:8080 --contribution 20
+python3 node/daemon.py --coordinator http://YOUR_IMAC_IP:8081 --contribution 20
 
 # On Windows (PowerShell)
-python node\daemon.py --coordinator http://YOUR_IMAC_IP:8080 --contribution 10
+python node\daemon.py --coordinator http://YOUR_IMAC_IP:8081 --contribution 10
 ```
 
 Each new node appears on the dashboard instantly. The aggregate specs update in real time.
@@ -186,7 +186,7 @@ bash vm/launch.sh linux 4 4096 5900
 
 # Run a node with custom settings
 python3 node/daemon.py \
-  --coordinator http://localhost:8080 \
+  --coordinator http://localhost:8081 \
   --contribution 20 \
   --heartbeat 3
 ```
@@ -237,8 +237,8 @@ All Python deps install automatically via `bash setup.sh`.
 **Android phone can't connect**  
 → Confirm phone is on same Wi-Fi. Use your iMac's actual LAN IP, not `localhost`.
 
-**Port 8080 already in use**  
-→ `lsof -ti:8080 | xargs kill -9`, then re-run `bash setup.sh`.
+**Port 8081 already in use**  
+→ `lsof -ti:8081 | xargs kill -9`, then re-run `bash setup.sh`.
 
 ---
 
