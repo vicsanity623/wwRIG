@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# WWRIG VM Launcher — World Wide Rig v0.1
+# WWRIG VM Launcher — World Wide Rig v0.2
 # Launches a QEMU virtual machine and exposes it via noVNC in the browser.
 #
 # Usage: bash launch.sh <os_type> <vcpus> <ram_mb> <vnc_port>
@@ -10,28 +10,24 @@
 #   vnc_port : VNC display port (e.g. 5900)
 #
 # Called automatically by the coordinator when a session is requested.
-# You can also run it manually for testing:
-#   bash vm/launch.sh linux 4 4096 5900
 # ═══════════════════════════════════════════════════════════════════════════════
-
-set -e
 
 OS_TYPE="${1:-linux}"
 VCPUS="${2:-4}"
 RAM_MB="${3:-4096}"
 VNC_PORT="${4:-5900}"
-WS_PORT=$((VNC_PORT + 100))   # noVNC WebSocket port
+WS_PORT=$((VNC_PORT + 100))
 
 WWRIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VM_DIR="$WWRIG_DIR/vm/images"
 NOVNC_DIR="$WWRIG_DIR/vm/novnc"
 LOG_DIR="$WWRIG_DIR/vm/logs"
-DISPLAY_NUM=$((VNC_PORT - 5900))  # QEMU display :N
+DISPLAY_NUM=$((VNC_PORT - 5900))
 
 mkdir -p "$VM_DIR" "$LOG_DIR"
 
 echo "╔═══════════════════════════════════════════════════╗"
-echo "║      WWRIG VM Launcher — World Wide Rig v0.1      ║"
+echo "║      WWRIG VM Launcher — World Wide Rig v0.2      ║"
 echo "╚═══════════════════════════════════════════════════╝"
 echo "  OS Type    : wwrig.${OS_TYPE}"
 echo "  vCPUs      : ${VCPUS}"
@@ -43,7 +39,6 @@ echo ""
 # ── Detect Accelerator ────────────────────────────────────────────────────────
 QEMU_ACCEL=""
 if [[ "$(uname)" == "Darwin" ]]; then
-  # Intel Mac: use HVF (Apple Hypervisor Framework) — native speed
   QEMU_ACCEL="-accel hvf"
   echo "  Accelerator: HVF (Apple Hypervisor Framework)"
 elif command -v kvm-ok &>/dev/null && kvm-ok &>/dev/null; then
@@ -55,14 +50,15 @@ else
 fi
 
 # ── QEMU Binary ───────────────────────────────────────────────────────────────
-if command -v qemu-system-x86_64 &>/dev/null; then
-  QEMU="qemu-system-x86_64"
-else
-  echo ""
-  echo "  [!!] QEMU not found. Install with:"
-  echo "       brew install qemu        (macOS)"
-  echo "       sudo apt install qemu-kvm (Linux)"
-  echo ""
+if ! command -v qemu-system-x86_64 &>/dev/null; then
+  echo "  [!!] QEMU not found. Install with: brew install qemu"
+  exit 1
+fi
+QEMU="qemu-system-x86_64"
+
+# ── Check VNC port availability ────────────────────────────────────────────────
+if nc -z localhost "$VNC_PORT" 2>/dev/null; then
+  echo "  [!!] Port ${VNC_PORT} is already in use. Choose a different port."
   exit 1
 fi
 
@@ -74,7 +70,6 @@ case "$OS_TYPE" in
     ISO_URL="https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso"
     DISK_IMG="$VM_DIR/wwrig-linux.qcow2"
 
-    # Download Alpine if needed (tiny: ~60MB)
     if [ ! -f "$ISO_PATH" ]; then
       echo "  Downloading Alpine Linux 3.19 (~60MB)..."
       if command -v curl &>/dev/null; then
@@ -82,12 +77,11 @@ case "$OS_TYPE" in
       elif command -v wget &>/dev/null; then
         wget -q --show-progress -O "$ISO_PATH" "$ISO_URL" || { echo "Download failed"; exit 1; }
       else
-        echo "  [!!] curl or wget required. Install with: brew install curl"
+        echo "  [!!] curl or wget required."
         exit 1
       fi
     fi
 
-    # Create persistent disk if it doesn't exist
     if [ ! -f "$DISK_IMG" ]; then
       echo "  Creating 20GB persistent disk..."
       qemu-img create -f qcow2 "$DISK_IMG" 20G
@@ -120,8 +114,14 @@ case "$OS_TYPE" in
       -netdev user,id=net0 \
       -usb -device usb-tablet \
       -daemonize \
-      -pidfile "$LOG_DIR/wwrig-linux-${VNC_PORT}.pid" &
+      -pidfile "$LOG_DIR/wwrig-linux-${VNC_PORT}.pid"
 
+    # Check if QEMU started
+    sleep 1
+    if ! nc -z localhost "$VNC_PORT" 2>/dev/null; then
+      echo "  [!!] QEMU failed to start. Check logs."
+      exit 1
+    fi
     ;;
 
   windows)
@@ -129,18 +129,13 @@ case "$OS_TYPE" in
     echo "       1. A Windows 11 ISO in vm/images/"
     echo "       2. VirtIO drivers ISO"
     echo "       3. A valid Windows licence from your host node"
-    echo ""
-    echo "  Once you have the ISO:"
-    echo "    1. Place it at: vm/images/windows11.iso"
-    echo "    2. Re-run this script"
     exit 0
     ;;
 
   macos)
     echo "  [!!] macOS virtualization requires:"
-    echo "       - Apple Silicon host (for native speed)"
-    echo "       - UTM or Tart on macOS 13+ hosts"
-    echo ""
+    echo "       - Apple Silicon host"
+    echo "       - UTM or Tart on macOS 13+"
     echo "  Install UTM: https://mac.getutm.app/"
     exit 0
     ;;

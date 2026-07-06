@@ -18,6 +18,7 @@ wwrig_config.json
 vm/images/*.iso
 vm/images/*.qcow2
 vm/logs/*
+vm/novnc/
 
 # Editor / OS
 *.swp

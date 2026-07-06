@@ -14,6 +14,7 @@ import uvicorn
 import time
 import uuid
 import asyncio
+import socket
 import subprocess
 import os
 import json
@@ -262,7 +263,18 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         )
 
     vm_id = str(uuid.uuid4())[:8].upper()
+
+    # Find free VNC port starting from 5900
     vnc_port = 5900 + len(vm_sessions)
+    for _ in range(50):
+        sock = socket.socket()
+        try:
+            sock.bind(("", vnc_port))
+            sock.close()
+            break
+        except OSError:
+            sock.close()
+            vnc_port += 1
     ws_port = vnc_port + 100
 
     vcpus = max(2, min(stats["contributed_cores"], 8))
@@ -320,8 +332,9 @@ async def terminate_session(vm_id: str):
     return {"status": "terminated"}
 
 
-async def _start_vm(vm_id: str, os_type: str, vcpus: int,
-                     ram_mb: int, vnc_port: int):
+async def _start_vm(
+    vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port: int
+):
     """Invoke the vm/launch.sh script (QEMU + noVNC)"""
     script = PROJECT_DIR / "vm" / "launch.sh"
     if script.exists():
