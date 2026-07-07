@@ -56,6 +56,27 @@ if ! command -v qemu-system-x86_64 &>/dev/null; then
 fi
 QEMU="qemu-system-x86_64"
 
+# ── Platform-specific flags ──────────────────────────────────────────────────
+IS_MACOS=false
+if [[ "$(uname)" == "Darwin" ]]; then
+  IS_MACOS=true
+fi
+
+# Helper: run QEMU with proper daemonization.
+# On macOS with Cocoa display we cannot use -daemonize (breaks window creation),
+# so we run in background via nohup instead.
+run_qemu() {
+  local pidfile="$1"; shift
+  if $IS_MACOS; then
+    nohup "$QEMU" "$@" > "$LOG_DIR/qemu-stdout.log" 2> "$LOG_DIR/qemu-stderr.log" &
+    local pid=$!
+    echo $pid > "$pidfile"
+    disown $pid 2>/dev/null
+  else
+    "$QEMU" "$@" -daemonize -pidfile "$pidfile"
+  fi
+}
+
 # ── Check VNC port availability ────────────────────────────────────────────────
 if nc -z localhost "$VNC_PORT" 2>/dev/null; then
   echo "  [!!] Port ${VNC_PORT} is already in use. Choose a different port."
@@ -112,7 +133,7 @@ case "$OS_TYPE" in
     echo ""
 
     # Launch QEMU (direct kernel boot with console=tty0 for proper VNC updates)
-    "$QEMU" \
+    run_qemu "$LOG_DIR/wwrig-linux-${VNC_PORT}.pid" \
       -name "wwrig.linux" \
       -m "${RAM_MB}M" \
       -smp "${VCPUS}" \
@@ -125,12 +146,20 @@ case "$OS_TYPE" in
       -cdrom "$ISO_PATH" \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
+      $([ "$IS_MACOS" = true ] && echo "-display cocoa") \
       -k en-us \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
-      -usb -device usb-tablet -device usb-kbd \
-      -daemonize \
-      -pidfile "$LOG_DIR/wwrig-linux-${VNC_PORT}.pid"
+      -usb -device usb-tablet -device usb-kbd
+
+    # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
+    if $IS_MACOS; then
+      REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.5 \
+        > "$LOG_DIR/refresh.log" 2>&1 &
+      echo $! > "$REFRESHER_PIDFILE"
+      echo "  [OK] Display refresher started (PID $!)"
+    fi
 
     # Check if QEMU started
     sleep 1
@@ -145,11 +174,6 @@ case "$OS_TYPE" in
     ISO_PATH="$VM_DIR/$ISO_NAME"
     DISK_IMG="$VM_DIR/wwrig-windows.qcow2"
     VIRTIO_ISO="$VM_DIR/virtio-win.iso"
-    OVMF_CODE=""
-    for p in /usr/local/share/qemu/edk2-x86_64-code.fd /opt/homebrew/share/qemu/edk2-x86_64-code.fd /usr/share/qemu/edk2-x86_64-code.fd; do
-      [ -f "$p" ] && OVMF_CODE="$p" && break
-    done
-    OVMF_VARS="${OVMF_CODE%code.fd}vars.fd"
 
     if [ ! -f "$ISO_PATH" ]; then
       echo "  [!!] Windows ISO not found at $ISO_PATH"
@@ -161,43 +185,35 @@ case "$OS_TYPE" in
       echo "       Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/"
       exit 1
     fi
-    if [ ! -f "$OVMF_CODE" ]; then
-      echo "  [!!] OVMF (UEFI) not found. Install QEMU: brew install qemu"
-      exit 1
-    fi
     [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 40G
 
     echo ""
     echo "  ──────────────────────────────────────────────────"
     echo "  [OK] wwrig.windows is starting..."
-    echo "       Press any key to boot from DVD when prompted."
     echo "  ──────────────────────────────────────────────────"
     echo ""
     echo "  → http://localhost:${WS_PORT}/wwrig.html"
     echo ""
 
-    "$QEMU" \
+    run_qemu "$LOG_DIR/wwrig-windows-${VNC_PORT}.pid" \
       -name "wwrig.windows" \
       -m "${RAM_MB}M" \
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
       -cpu host \
-      -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
-      -drive if=pflash,format=raw,file="$OVMF_VARS" \
       -drive file="$DISK_IMG",format=qcow2,if=virtio \
       -cdrom "$ISO_PATH" \
       -drive file="$VIRTIO_ISO",index=1,media=cdrom \
       -boot order=d \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
+      -display cocoa \
       -k en-us \
+      -global PIIX4_PM.disable_s3=1 \
+      -global PIIX4_PM.disable_s4=1 \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
-      -usb -device usb-tablet -device usb-kbd \
-      -machine q35 \
-      -device intel-iommu \
-      -daemonize \
-      -pidfile "$LOG_DIR/wwrig-windows-${VNC_PORT}.pid"
+      -usb -device usb-mouse -device usb-kbd
     ;;
 
   macos)

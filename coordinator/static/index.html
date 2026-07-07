@@ -488,6 +488,24 @@
     letter-spacing: 1px;
   }
 
+  .kill-btn {
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 1px;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 6px;
+  }
+
+  .kill-btn:hover {
+    background: var(--red);
+    color: var(--bg);
+  }
+
   .session-link:hover { text-decoration: underline; }
 
   /* ── Bottom: Console Log ── */
@@ -773,11 +791,11 @@
       </div>
 
       <!-- Windows -->
-      <div class="os-card locked" id="card-win">
+      <div class="os-card" id="card-win">
         <div class="os-name">wwrig.win64</div>
-        <div class="os-desc">Windows 11 x64<br>Requires licence key from host node</div>
-        <div class="os-badge locked-badge">COMING SOON</div>
-        <button class="launch-btn" disabled>
+        <div class="os-desc">Windows 10 x64<br>Install via VNC (license required from host)</div>
+        <div class="os-badge">AVAILABLE</div>
+        <button class="launch-btn" id="btn-win" onclick="openLaunchModal('windows')">
           <span>▶ Launch</span>
         </button>
       </div>
@@ -921,6 +939,7 @@ function renderStats(s) {
   // Launch button state
   const canLaunch = s.node_count > 0;
   document.getElementById('btn-linux').disabled = !canLaunch;
+  document.getElementById('btn-win').disabled = !canLaunch;
 }
 
 function setBar(id, pct) {
@@ -1005,11 +1024,12 @@ function renderSessions(sessions) {
           ${isProvision ? '<span class="spin"></span> ' : ''}${s.status}
         </span>
       </div>
-      <div style="color:var(--text-dim)">
-        ${s.vcpus} vCPU &nbsp;/&nbsp; ${(s.ram_mb/1024).toFixed(1)}GB RAM
+      <div style="color:var(--text-dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span>${s.vcpus} vCPU &nbsp;/&nbsp; ${(s.ram_mb/1024).toFixed(1)}GB RAM</span>
         ${isRunning && s.novnc_url ?
-          `&nbsp;·&nbsp; <a href="${s.novnc_url}" target="_blank" class="session-link">OPEN DISPLAY →</a>` : ''}
-        ${isProvision ? '&nbsp;·&nbsp; <span style="color:var(--amber)">starting VM...</span>' : ''}
+          `<a href="${s.novnc_url}" target="_blank" class="session-link">OPEN DISPLAY →</a>` : ''}
+        ${isProvision ? '<span style="color:var(--amber)">starting VM...</span>' : ''}
+        ${isRunning ? `<button class="kill-btn" onclick="terminateSession('${s.id}')">KILL</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1094,6 +1114,17 @@ async function confirmLaunch() {
       btn.innerHTML = '<span>▶ CONFIRM LAUNCH</span>';
       btn.disabled  = false;
     }, 2000);
+  }
+}
+
+// ── Terminate Session ──────────────────────────────────────────────────────────
+async function terminateSession(vmId) {
+  if (!confirm(`Kill wwrig session ${vmId}?`)) return;
+  try {
+    await fetch(`${API}/api/vm/${vmId}`, { method: 'DELETE' });
+    await fetchSessions();
+  } catch (e) {
+    console.error('Terminate failed', e);
   }
 }
 

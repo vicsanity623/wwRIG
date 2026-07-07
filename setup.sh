@@ -182,6 +182,7 @@ echo -e "${GREEN}║                 WWRIG IS LIVE                         ║${
 echo -e "${GREEN}╠═══════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                                       ║${NC}"
 echo -e "${GREEN}║  Dashboard   : http://localhost:8081                  ║${NC}"
+echo -e "${GREEN}║  Native GUI  : python3 coordinator/gui.py            ║${NC}"
 echo -e "${GREEN}║  On your LAN : http://${LOCAL_IP}:8081           ║${NC}"
 echo -e "${GREEN}║  Mobile Node : http://${LOCAL_IP}:8081/mobile.html ║${NC}"
 echo -e "${GREEN}║                                                       ║${NC}"

@@ -11,16 +11,20 @@ wwrig = world wide rig    → anyone can contribute compute
 
 ## What This Is (Honest)
 
-WWRIG is a **local-network distributed computing prototype**. It lets multiple devices on your LAN connect as "nodes" to pool their CPU/RAM stats into a live dashboard, and launch a real Alpine Linux VM (via QEMU + noVNC) in your browser.
+WWRIG is a **local-network distributed computing prototype**. It lets multiple devices on your LAN connect as "nodes" to pool their CPU/RAM stats into a live dashboard, and launch real VMs (Linux, Windows) on your own machine.
 
 ### What actually works today:
 - Multiple devices (Mac, Linux, Android phones) register as nodes
 - Live dashboard with aggregate pool specs (cores, RAM, VRAM)
+- **Native macOS GUI** (`coordinator/gui.py`) — replaces browser dashboard
 - **Real Alpine Linux VM** launched via QEMU with HVF/KVM acceleration
-- Full browser-based desktop via noVNC (keyboard + mouse)
-- Auto-resolving VNC port conflicts (finds a free port if 5900 is busy)
-- Periodic display refresh (display updates every 2.5s)
+- **Real Windows 10/11 VM** (UEFI + VirtIO drivers, install via VNC)
+- VMs open in **native QEMU Cocoa windows** on macOS (no browser needed)
+- Built-in **display refresher** (workaround for macOS QEMU VGA update bug)
+- **Kill button** per running session (also kills QEMU + websockify)
 - Auth tokens to control who can join your coordinator
+- Auto-resolving VNC port conflicts
+- Periodic display refresh (every 2.5s in browser)
 - Docker deployment for the coordinator
 - macOS menubar plugin (SwiftBar/xBar) showing pool stats + VM sessions
 
@@ -39,10 +43,13 @@ WWRIG is a **local-network distributed computing prototype**. It lets multiple d
 brew install qemu            # for VM sessions
 pip3 install psutil requests  # for node daemon
 
-# Start the full stack
+# Start the full stack (coordinator + node)
 bash setup.sh
 
-# Open dashboard
+# Open native GUI
+python3 coordinator/gui.py
+
+# Or open browser dashboard
 open http://localhost:8081
 ```
 
@@ -63,46 +70,54 @@ docker compose up -d
 
 ---
 
+## Launching VMs
+
+### Linux (Alpine 3.19):
+```bash
+# From the GUI: click "Launch wwrig.linux"
+# Or manually:
+bash vm/launch.sh linux 2 4096 5901
+```
+
+### Windows 10/11:
+1. Download a Windows 10/11 ISO from Microsoft
+2. Place it in `vm/images/windows.iso` (or symlink to your downloaded file)
+3. The VirtIO drivers ISO is auto-downloaded on first launch
+4. From the GUI: click **Launch wwrig.win64**
+5. A native QEMU window appears — click inside and press any key to boot from DVD
+6. At the "Where to install Windows" screen, click **Load driver → Browse**
+7. Select the VirtIO CD-ROM → `viostor\w10\amd64` → OK (disk appears)
+8. Select the disk and install
+
+> **Mouse capture**: Click inside the QEMU window to capture the mouse.
+> **Release mouse**: Press **Control + Option** (both keys together).
+> **Note**: macOS QEMU has a known VGA display refresh bug. wwRIG auto-starts a
+> helper script (`vm/refresh_display.py`) that clicks View→VGA every 0.5s to
+> keep the display up to date.
+
+---
+
 ## Kill Everything & Restart
 
 ### Kill all processes:
 
 ```bash
+bash setup.sh stop
+# or manually:
 pkill -f "qemu-system"       # kill running VMs
 pkill -f websockify          # kill noVNC proxies
 pkill -f "coordinator/server" # kill coordinator
 pkill -f "node/daemon"       # kill node daemon
-# or nuke by port
-lsof -ti:8081,6000,6001,5900,5901,5902 | xargs kill -9
+pkill -f refresh_display     # kill display refresher
 ```
 
 ### Start fresh:
 
 ```bash
-# 1. Coordinator
 cd coordinator && nohup python3 server.py &
-
-# 2. Node daemon (replace TOKEN with your auth key)
 python3 node/daemon.py --coordinator http://localhost:8081 --token TOKEN --contribution 20
-
-# 3. Launch a VM (from the dashboard or manually)
-bash vm/launch.sh linux 2 4096 5901
-
-# 4. Open dashboard
-open http://localhost:8081
-
-# 5. Open VM display (after VM boots ~30s)
-open http://localhost:6001/wwrig.html
-```
-
-### One-liner restart:
-
-```bash
-pkill -f "qemu-system|websockify|coordinator/server|node/daemon"
-sleep 2
-cd coordinator && nohup python3 server.py &
-cd ..
-python3 node/daemon.py --coordinator http://localhost:8081 --token TOKEN --contribution 20
+python3 coordinator/gui.py          # native GUI
+# or: open http://localhost:8081    # browser dashboard
 ```
 
 ---
@@ -114,17 +129,23 @@ wwRIG/
 ├── setup.sh                  ← one-command launcher
 ├── coordinator/
 │   ├── server.py             ← FastAPI coordinator (the brain)
+│   ├── gui.py                ← Native macOS GUI (tkinter)
 │   └── static/
-│       ├── index.html        ← dashboard
+│       ├── index.html        ← browser dashboard
 │       └── mobile.html       ← mobile node page
 ├── node/
 │   └── daemon.py             ← node reporter (run on any machine)
 ├── android-node/
 │   └── index.html            ← mobile node source
 ├── vm/
-│   ├── launch.sh             ← QEMU + noVNC launcher
+│   ├── launch.sh             ← QEMU + noVNC launcher (Linux/Windows/macOS)
 │   ├── setup_novnc.sh        ← WebSocket proxy
-│   └── images/               ← ISOs and disk images
+│   ├── refresh_display.py    ← macOS QEMU display refresher workaround
+│   ├── images/               ← ISOs and disk images
+│   │   ├── windows.iso       ← symlink to your Windows 10/11 ISO
+│   │   └── virtio-win.iso    ← VirtIO drivers for Windows (auto-downloaded)
+│   ├── logs/                 ← QEMU, noVNC, and refresher logs
+│   └── novnc/                ← noVNC web client (auto-installed)
 ├── scripts/
 │   ├── check_system.sh
 │   └── wwrig.10s.py          ← SwiftBar/xBar menubar plugin

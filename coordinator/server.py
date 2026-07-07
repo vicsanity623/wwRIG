@@ -323,14 +323,41 @@ async def list_sessions():
 async def terminate_session(vm_id: str):
     if vm_id not in vm_sessions:
         raise HTTPException(status_code=404, detail="Session not found")
-    pid = vm_sessions[vm_id].get("pid")
+    s = vm_sessions[vm_id]
+
+    vnc_port = s.get("vnc_port")
+    ws_port = s.get("ws_port")
+    os_type = s.get("os_type", "")
+
+    # Kill QEMU by VM name
+    subprocess.run(
+        ["pkill", "-f", f"qemu-system.*wwrig\\.{os_type}"],
+        capture_output=True,
+    )
+
+    # Kill websockify by matching WS port
+    if ws_port:
+        subprocess.run(
+            ["pkill", "-f", f"websockify.*{ws_port}"],
+            capture_output=True,
+        )
+
+    # Kill display refresher
+    subprocess.run(
+        ["pkill", "-f", "refresh_display.py"],
+        capture_output=True,
+    )
+
+    # Also try the stored PID in case it's still valid
+    pid = s.get("pid")
     if pid:
         try:
             os.kill(pid, 15)
-        except ProcessLookupError:
+        except (ProcessLookupError, OSError):
             pass
-    vm_sessions[vm_id]["status"] = "terminated"
-    log(f"SESSION TERMINATED: {vm_id}", "WARN")
+
+    s["status"] = "terminated"
+    log(f"SESSION TERMINATED: {vm_id} (VNC:{vnc_port} WS:{ws_port})", "WARN")
     return {"status": "terminated"}
 
 
