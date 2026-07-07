@@ -155,7 +155,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.5 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
@@ -204,13 +204,14 @@ case "$OS_TYPE" in
       -drive file="$DISK_IMG",format=qcow2,if=virtio \
       -cdrom "$ISO_PATH" \
       -drive file="$VIRTIO_ISO",index=1,media=cdrom \
-      -boot order=d \
+      -boot order=dc \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa \
       -k en-us \
       -global PIIX4_PM.disable_s3=1 \
       -global PIIX4_PM.disable_s4=1 \
+      -machine kernel_irqchip=split \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
       -usb -device usb-mouse -device usb-kbd
@@ -218,7 +219,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.5 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
