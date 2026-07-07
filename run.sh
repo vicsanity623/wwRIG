@@ -21,12 +21,15 @@ echo ""
 
 # ── Kill everything ────────────────────────────────────────────────────────────
 echo -e "${YELLOW}  Killing all WWRIG processes...${NC}"
-pkill -f "qemu-system"     2>/dev/null || true
-pkill -f websockify        2>/dev/null || true
-pkill -f refresh_display   2>/dev/null || true
-pkill -f "coordinator/server" 2>/dev/null || true
-pkill -f "node/daemon"     2>/dev/null || true
-pkill -f "gui.py"          2>/dev/null || true
+pkill -f "qemu-system"         2>/dev/null || true
+pkill -f websockify            2>/dev/null || true
+pkill -f refresh_display       2>/dev/null || true
+pkill -f "coordinator/server"  2>/dev/null || true
+pkill -f "node/daemon"         2>/dev/null || true
+pkill -f "gui.py"              2>/dev/null || true
+pkill -f "server.py"           2>/dev/null || true
+# Also kill by port in case process names don't match
+lsof -ti:8081,6000,6001,5900,5901,5902 | xargs kill -9 2>/dev/null || true
 echo -e "  ${DIM}[OK] All processes terminated${NC}"
 
 # ── Clean up stale files ──────────────────────────────────────────────────────
