@@ -201,7 +201,7 @@ case "$OS_TYPE" in
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
       -cpu host \
-      -drive file="$DISK_IMG",format=qcow2,if=virtio \
+      -drive file="$DISK_IMG",format=qcow2,if=ide \
       -cdrom "$ISO_PATH" \
       -drive file="$VIRTIO_ISO",index=1,media=cdrom \
       -boot order=dc \
