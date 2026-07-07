@@ -277,7 +277,7 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
             vnc_port += 1
     ws_port = vnc_port + 100
     novnc_url = (
-        f"http://localhost:{ws_port}/vnc.html"
+        f"http://localhost:{ws_port}/wwrig.html"
         "?autoconnect=true&resize=scale"
     )
 

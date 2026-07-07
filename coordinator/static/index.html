@@ -989,19 +989,30 @@ function renderSessions(sessions) {
     el.innerHTML = '<div class="empty-state" style="padding:10px">No active OS sessions</div>';
     return;
   }
-  el.innerHTML = sessions.map(s => `
+  el.innerHTML = sessions.map(s => {
+    const isRunning = s.status === 'running' || s.status.includes('running');
+    const isProvision = s.status === 'provisioning' || s.status === 'provisioning';
+    // Auto-open VNC when session transitions to running
+    if (isRunning && s.novnc_url && !s._autoOpened) {
+      s._autoOpened = true;
+      setTimeout(() => window.open(s.novnc_url, '_blank'), 500);
+    }
+    return `
     <div class="session-item">
       <div class="session-header">
         <span>wwrig.${s.os_type.toUpperCase()} &nbsp;·&nbsp; ID: ${s.id}</span>
-        <span style="color:${s.status==='running'||s.status.includes('running')?'var(--green)':'var(--amber)'}">${s.status}</span>
+        <span style="color:${isRunning?'var(--green)':isProvision?'var(--amber)':'var(--red)'}">
+          ${isProvision ? '<span class="spin"></span> ' : ''}${s.status}
+        </span>
       </div>
       <div style="color:var(--text-dim)">
         ${s.vcpus} vCPU &nbsp;/&nbsp; ${(s.ram_mb/1024).toFixed(1)}GB RAM
-        ${s.status.includes('running') && s.novnc_url ?
+        ${isRunning && s.novnc_url ?
           `&nbsp;·&nbsp; <a href="${s.novnc_url}" target="_blank" class="session-link">OPEN DISPLAY →</a>` : ''}
+        ${isProvision ? '&nbsp;·&nbsp; <span style="color:var(--amber)">starting VM...</span>' : ''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── Fetch Log ─────────────────────────────────────────────────────────────────
@@ -1074,12 +1085,7 @@ async function confirmLaunch() {
     const data = await r.json();
     closeModal();
 
-    if (data.novnc_url) {
-      // Try to open noVNC — may not be running yet
-      setTimeout(() => window.open(data.novnc_url, '_blank'), 3000);
-    }
-
-    // Refresh sessions
+    // Refresh sessions — will auto-open VNC when status goes running
     await fetchSessions();
     await fetchLog();
   } catch (e) {

@@ -1,9 +1,9 @@
-# WWRIG Roadmap — From LAN Demo to World Wide Rig
+# WWRIG Roadmap — From LAN Cluster to World Wide Rig
 
-Current: **v0.2.1** — Local network prototype with real QEMU VM, mobile node support, working keyboard, and periodic display refresh.
+Current: **v0.2.2** — Local cluster prototype: combine Macs + PCs + Android on your LAN.
 
-The vision is grand, but the path is grounded in real engineering constraints.
-Below is the honest, step-by-step plan.
+The vision is grand, but we start local. No global coordinators, no cloud.
+First make it work on your home network. Then scale.
 
 ---
 

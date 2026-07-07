@@ -108,7 +108,7 @@ case "$OS_TYPE" in
     echo "  ──────────────────────────────────────────────────"
     echo ""
     echo "  noVNC will be available at:"
-    echo "  → http://localhost:${WS_PORT}/vnc.html"
+    echo "  → http://localhost:${WS_PORT}/wwrig.html"
     echo ""
 
     # Launch QEMU (direct kernel boot with console=tty0 for proper VNC updates)
@@ -145,8 +145,11 @@ case "$OS_TYPE" in
     ISO_PATH="$VM_DIR/$ISO_NAME"
     DISK_IMG="$VM_DIR/wwrig-windows.qcow2"
     VIRTIO_ISO="$VM_DIR/virtio-win.iso"
-    OVMF_CODE="/usr/local/share/qemu/edk2-x86_64-code.fd"
-    OVMF_VARS="/usr/local/share/qemu/edk2-i386-vars.fd"
+    OVMF_CODE=""
+    for p in /usr/local/share/qemu/edk2-x86_64-code.fd /opt/homebrew/share/qemu/edk2-x86_64-code.fd /usr/share/qemu/edk2-x86_64-code.fd; do
+      [ -f "$p" ] && OVMF_CODE="$p" && break
+    done
+    OVMF_VARS="${OVMF_CODE%code.fd}vars.fd"
 
     if [ ! -f "$ISO_PATH" ]; then
       echo "  [!!] Windows ISO not found at $ISO_PATH"
@@ -155,11 +158,11 @@ case "$OS_TYPE" in
     fi
     if [ ! -f "$VIRTIO_ISO" ]; then
       echo "  [!!] VirtIO drivers ISO not found at $VIRTIO_ISO"
-      echo "       Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/"
+      echo "       Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/"
       exit 1
     fi
     if [ ! -f "$OVMF_CODE" ]; then
-      echo "  [!!] OVMF (UEFI) not found. Install with: brew install edk2"
+      echo "  [!!] OVMF (UEFI) not found. Install QEMU: brew install qemu"
       exit 1
     fi
     [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 40G
@@ -170,7 +173,7 @@ case "$OS_TYPE" in
     echo "       Press any key to boot from DVD when prompted."
     echo "  ──────────────────────────────────────────────────"
     echo ""
-    echo "  → http://localhost:${WS_PORT}/vnc.html"
+    echo "  → http://localhost:${WS_PORT}/wwrig.html"
     echo ""
 
     "$QEMU" \

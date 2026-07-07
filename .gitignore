@@ -20,6 +20,11 @@ vm/images/*.qcow2
 vm/logs/*
 vm/novnc/
 
+# Runtime
+nohup.out
+coordinator/nohup.out
+*.log
+
 # Editor / OS
 *.swp
 *.swo
