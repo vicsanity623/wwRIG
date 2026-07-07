@@ -1,4 +1,4 @@
-# WWRIG — World Wide Rig v0.2.1
+# WWRIG — World Wide Rig v0.2.2
 
 ### *Distributed computing, one node at a time.*
 
@@ -59,6 +59,50 @@ Open `http://YOUR_IMAC_IP:8081/mobile.html` on your phone browser.
 ### Docker deployment:
 ```bash
 docker compose up -d
+```
+
+---
+
+## Kill Everything & Restart
+
+### Kill all processes:
+
+```bash
+pkill -f "qemu-system"       # kill running VMs
+pkill -f websockify          # kill noVNC proxies
+pkill -f "coordinator/server" # kill coordinator
+pkill -f "node/daemon"       # kill node daemon
+# or nuke by port
+lsof -ti:8081,6000,6001,5900,5901,5902 | xargs kill -9
+```
+
+### Start fresh:
+
+```bash
+# 1. Coordinator
+cd coordinator && nohup python3 server.py &
+
+# 2. Node daemon (replace TOKEN with your auth key)
+python3 node/daemon.py --coordinator http://localhost:8081 --token TOKEN --contribution 20
+
+# 3. Launch a VM (from the dashboard or manually)
+bash vm/launch.sh linux 2 4096 5901
+
+# 4. Open dashboard
+open http://localhost:8081
+
+# 5. Open VM display (after VM boots ~30s)
+open http://localhost:6001/wwrig.html
+```
+
+### One-liner restart:
+
+```bash
+pkill -f "qemu-system|websockify|coordinator/server|node/daemon"
+sleep 2
+cd coordinator && nohup python3 server.py &
+cd ..
+python3 node/daemon.py --coordinator http://localhost:8081 --token TOKEN --contribution 20
 ```
 
 ---

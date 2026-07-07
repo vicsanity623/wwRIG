@@ -45,7 +45,7 @@ if not AUTH_TOKEN:
         except Exception:
             pass
 
-app = FastAPI(title="WWRIG Coordinator", version="0.2.1")
+app = FastAPI(title="WWRIG Coordinator", version="0.2.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -113,7 +113,7 @@ class ContributionUpdate(BaseModel):
 async def health():
     return {
         "status": "ok",
-        "version": "0.2.1",
+        "version": "0.2.2",
         "node_count": len(nodes),
         "auth_required": bool(AUTH_TOKEN),
     }
@@ -370,7 +370,7 @@ async def get_log(limit: int = 60):
 @app.on_event("startup")
 async def startup():
     log("═══════════════════════════════════════════════")
-    log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.2.1")
+    log("  WWRIG COORDINATOR ONLINE — World Wide Rig v0.2.2")
     log(f"  Listening on {HOST}:{PORT}")
     if AUTH_TOKEN:
         log(f"  Auth token: {AUTH_TOKEN}")
