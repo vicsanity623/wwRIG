@@ -236,7 +236,8 @@ case "$OS_TYPE" in
       -global ICH9-LPC.noreboot=on \
       -device e1000,netdev=net0 \
       -netdev user,id=net0 \
-      -device intel-hda -device hda-duplex \
+      -audiodev coreaudio,id=audio0 \
+      -device intel-hda -device hda-duplex,audiodev=audio0 \
       -usb -device usb-tablet -device usb-kbd
 
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
