@@ -87,6 +87,19 @@ case "$OS_TYPE" in
       qemu-img create -f qcow2 "$DISK_IMG" 20G
     fi
 
+    # Extract kernel + initrd from ISO for direct boot (console=tty0 fixes VNC display updates)
+    KERNEL="$VM_DIR/vmlinuz"
+    INITRD="$VM_DIR/initramfs"
+    if [ ! -f "$KERNEL" ] || [ ! -f "$INITRD" ]; then
+      echo "  Extracting kernel from ISO..."
+      TMPMNT="/tmp/alpine-mnt-$$"
+      mkdir -p "$TMPMNT"
+      bsdtar xf "$ISO_PATH" -C "$TMPMNT" 2>/dev/null
+      cp "$TMPMNT"/boot/vmlinuz-virt "$KERNEL" 2>/dev/null
+      cp "$TMPMNT"/boot/initramfs-virt "$INITRD" 2>/dev/null
+      rm -rf "$TMPMNT"
+    fi
+
     echo ""
     echo "  ──────────────────────────────────────────────────"
     echo "  [OK] wwrig.linux is starting..."
@@ -98,23 +111,24 @@ case "$OS_TYPE" in
     echo "  → http://localhost:${WS_PORT}/vnc.html"
     echo ""
 
-    # Launch QEMU
+    # Launch QEMU (direct kernel boot with console=tty0 for proper VNC updates)
     "$QEMU" \
       -name "wwrig.linux" \
       -m "${RAM_MB}M" \
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
       -cpu host \
+      -kernel "$KERNEL" \
+      -initrd "$INITRD" \
+      -append "console=tty0 console=ttyS0 alpine_dev=/dev/sr0:iso9660 modloop=/boot/modloop-virt modules=loop,squashfs,sd-mod,usb-storage quiet" \
       -drive file="$DISK_IMG",format=qcow2,if=virtio \
       -cdrom "$ISO_PATH" \
-      -boot order=cd,once=d \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
       -k en-us \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
       -usb -device usb-tablet -device usb-kbd \
-      -serial none \
       -daemonize \
       -pidfile "$LOG_DIR/wwrig-linux-${VNC_PORT}.pid"
 
@@ -127,18 +141,75 @@ case "$OS_TYPE" in
     ;;
 
   windows)
-    echo "  [!!] Windows session requires:"
-    echo "       1. A Windows 11 ISO in vm/images/"
-    echo "       2. VirtIO drivers ISO"
-    echo "       3. A valid Windows licence from your host node"
-    exit 0
+    ISO_NAME="windows.iso"
+    ISO_PATH="$VM_DIR/$ISO_NAME"
+    DISK_IMG="$VM_DIR/wwrig-windows.qcow2"
+    VIRTIO_ISO="$VM_DIR/virtio-win.iso"
+    OVMF_CODE="/usr/local/share/qemu/edk2-x86_64-code.fd"
+    OVMF_VARS="/usr/local/share/qemu/edk2-i386-vars.fd"
+
+    if [ ! -f "$ISO_PATH" ]; then
+      echo "  [!!] Windows ISO not found at $ISO_PATH"
+      echo "       Download from: https://www.microsoft.com/software-download/windows11"
+      exit 1
+    fi
+    if [ ! -f "$VIRTIO_ISO" ]; then
+      echo "  [!!] VirtIO drivers ISO not found at $VIRTIO_ISO"
+      echo "       Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/"
+      exit 1
+    fi
+    if [ ! -f "$OVMF_CODE" ]; then
+      echo "  [!!] OVMF (UEFI) not found. Install with: brew install edk2"
+      exit 1
+    fi
+    [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 40G
+
+    echo ""
+    echo "  ──────────────────────────────────────────────────"
+    echo "  [OK] wwrig.windows is starting..."
+    echo "       Press any key to boot from DVD when prompted."
+    echo "  ──────────────────────────────────────────────────"
+    echo ""
+    echo "  → http://localhost:${WS_PORT}/vnc.html"
+    echo ""
+
+    "$QEMU" \
+      -name "wwrig.windows" \
+      -m "${RAM_MB}M" \
+      -smp "${VCPUS}" \
+      $QEMU_ACCEL \
+      -cpu host \
+      -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+      -drive if=pflash,format=raw,file="$OVMF_VARS" \
+      -drive file="$DISK_IMG",format=qcow2,if=virtio \
+      -cdrom "$ISO_PATH" \
+      -drive file="$VIRTIO_ISO",index=1,media=cdrom \
+      -boot order=d \
+      -vga std \
+      -vnc ":${DISPLAY_NUM}" \
+      -k en-us \
+      -device virtio-net-pci,netdev=net0 \
+      -netdev user,id=net0 \
+      -usb -device usb-tablet -device usb-kbd \
+      -machine q35 \
+      -device intel-iommu \
+      -daemonize \
+      -pidfile "$LOG_DIR/wwrig-windows-${VNC_PORT}.pid"
     ;;
 
   macos)
-    echo "  [!!] macOS virtualization requires:"
-    echo "       - Apple Silicon host"
-    echo "       - UTM or Tart on macOS 13+"
-    echo "  Install UTM: https://mac.getutm.app/"
+    echo "  [!!] macOS on Intel QEMU requires a macOS installer ISO."
+    echo ""
+    echo "  Create one:"
+    echo "    Download macOS from App Store, then:"
+    echo "    hdiutil create -o /tmp/macOS.iso -size 16G -layout SPUD -fs HFS+J"
+    echo "    hdiutil attach /tmp/macOS.iso -noverify -mountpoint /tmp/macos_mount"
+    echo "    sudo /Applications/Install\\ macOS.app/Contents/Resources/createinstallmedia --volume /tmp/macos_mount --nointeraction"
+    echo "    hdiutil detach /tmp/macos_mount"
+    echo "    mv /tmp/macOS.iso vm/images/macos.iso"
+    echo ""
+    echo "  Note: macOS VMs on Intel QEMU require macOS Monterey or older"
+    echo "  (Ventura+ requires Apple Silicon / Virtualization.framework)"
     exit 0
     ;;
 
