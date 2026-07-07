@@ -240,14 +240,15 @@ case "$OS_TYPE" in
       -device intel-hda -device hda-output,audiodev=audio0 \
       -usb -device usb-tablet -device usb-kbd
 
-    # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
-    if $IS_MACOS; then
-      REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.01 \
-        > "$LOG_DIR/refresh.log" 2>&1 &
-      echo $! > "$REFRESHER_PIDFILE"
-      echo "  [OK] Display refresher started (PID $!)"
-    fi
+    # Display refresher disabled — virtio-gpu updates natively on macOS Cocoa.
+    # Enable only if display freezes (change "virtio" → "VGA" in refresh_display.py for std VGA)
+    # if $IS_MACOS; then
+    #   REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
+    #   nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.01 \
+    #     > "$LOG_DIR/refresh.log" 2>&1 &
+    #   echo $! > "$REFRESHER_PIDFILE"
+    #   echo "  [OK] Display refresher started (PID $!)"
+    # fi
     ;;
 
   macos)
