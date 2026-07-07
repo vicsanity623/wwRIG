@@ -819,7 +819,7 @@
       <!-- Windows -->
       <div class="os-card" id="card-win">
         <div class="os-name">wwrig.win64</div>
-        <div class="os-desc">Windows 10 x64<br>Install via VNC (license required from host)</div>
+        <div class="os-desc">Windows 10 x64<br>VMware Fusion — GPU accelerated</div>
         <div class="os-badge">AVAILABLE</div>
         <button class="launch-btn" id="btn-win" onclick="openLaunchModal('windows')">
           <span>▶ Install</span>
@@ -1040,8 +1040,9 @@ function renderSessions(sessions) {
   el.innerHTML = sessions.map(s => {
     const isRunning = s.status === 'running' || s.status.includes('running');
     const isProvision = s.status === 'provisioning' || s.status === 'provisioning';
-    // Auto-open VNC when session transitions to running
-    if (isRunning && s.novnc_url && !s._autoOpened) {
+    const isFusion = s.fusion_mode;
+    // Auto-open VNC when session transitions to running (Linux only)
+    if (isRunning && s.novnc_url && !isFusion && !s._autoOpened) {
       s._autoOpened = true;
       setTimeout(() => window.open(s.novnc_url, '_blank'), 500);
     }
@@ -1055,8 +1056,9 @@ function renderSessions(sessions) {
       </div>
       <div style="color:var(--text-dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span>${s.vcpus} vCPU &nbsp;/&nbsp; ${(s.ram_mb/1024).toFixed(1)}GB RAM</span>
-        ${isRunning && s.novnc_url ?
+        ${isRunning && s.novnc_url && !isFusion ?
           `<a href="${s.novnc_url}" target="_blank" class="session-link">OPEN DISPLAY →</a>` : ''}
+        ${isRunning && isFusion ? '<span style="color:var(--amber)">FUSION window open</span>' : ''}
         ${isProvision ? '<span style="color:var(--amber)">starting VM...</span>' : ''}
         ${isRunning ? `<button class="kill-btn" onclick="terminateSession('${s.id}')">KILL</button>` : ''}
       </div>

@@ -263,26 +263,31 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         )
 
     vm_id = str(uuid.uuid4())[:8].upper()
-
-    # Find free VNC port starting from 5900
-    vnc_port = 5900 + len(vm_sessions)
-    for _ in range(50):
-        sock = socket.socket()
-        try:
-            sock.bind(("", vnc_port))
-            sock.close()
-            break
-        except OSError:
-            sock.close()
-            vnc_port += 1
-    ws_port = vnc_port + 100
-    novnc_url = (
-        f"http://localhost:{ws_port}/wwrig.html"
-        "?autoconnect=true&resize=scale"
-    )
+    is_fusion = req.os_type == "windows"
 
     vcpus = max(2, min(stats["contributed_cores"], 8))
     ram_mb = max(2048, min(int(stats["contributed_ram_gb"] * 1024), 8192))
+
+    vnc_port = None
+    ws_port = None
+    novnc_url = None
+
+    if not is_fusion:
+        vnc_port = 5900 + len(vm_sessions)
+        for _ in range(50):
+            sock = socket.socket()
+            try:
+                sock.bind(("", vnc_port))
+                sock.close()
+                break
+            except OSError:
+                sock.close()
+                vnc_port += 1
+        ws_port = vnc_port + 100
+        novnc_url = (
+            f"http://localhost:{ws_port}/wwrig.html"
+            "?autoconnect=true&resize=scale"
+        )
 
     vm_sessions[vm_id] = {
         "id": vm_id,
@@ -292,16 +297,21 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         "vnc_port": vnc_port,
         "ws_port": ws_port,
         "novnc_url": novnc_url,
+        "fusion_mode": is_fusion,
         "status": "provisioning",
         "started": time.time(),
         "pid": None,
     }
 
+    if is_fusion:
+        tag = "FUSION"
+    else:
+        tag = f"VNC:{vnc_port}"
     log(f"SESSION PROVISIONING: wwrig.{req.os_type.upper()} ID={vm_id} "
-        f"— {vcpus} vCPU / {ram_mb}MB RAM / VNC:{vnc_port}", "LAUNCH")
+        f"— {vcpus} vCPU / {ram_mb}MB RAM / {tag}", "LAUNCH")
 
     background_tasks.add_task(
-        _start_vm, vm_id, req.os_type, vcpus, ram_mb, vnc_port
+        _start_vm, vm_id, req.os_type, vcpus, ram_mb, vnc_port or 0
     )
     return {
         "vm_id": vm_id,
@@ -310,6 +320,7 @@ async def launch_vm(req: VMRequest, background_tasks: BackgroundTasks):
         "ram_mb": ram_mb,
         "vnc_port": vnc_port,
         "novnc_url": novnc_url,
+        "fusion_mode": is_fusion,
         "message": f"wwrig.{req.os_type} session {vm_id} is provisioning...",
     }
 
@@ -328,21 +339,29 @@ async def terminate_session(vm_id: str):
     vnc_port = s.get("vnc_port")
     ws_port = s.get("ws_port")
     os_type = s.get("os_type", "")
+    is_fusion = s.get("fusion_mode", False)
 
-    # Kill QEMU by VM name
-    subprocess.run(
-        ["pkill", "-f", f"qemu-system.*wwrig\\.{os_type}"],
-        capture_output=True,
-    )
-
-    # Kill websockify by matching WS port
-    if ws_port:
+    if is_fusion:
+        # Stop Fusion VM via vmrun
+        fusion_script = PROJECT_DIR / "vm" / "fusion.sh"
         subprocess.run(
-            ["pkill", "-f", f"websockify.*{ws_port}"],
+            ["bash", str(fusion_script), "stop"],
             capture_output=True,
         )
+    else:
+        # Kill QEMU by VM name
+        subprocess.run(
+            ["pkill", "-f", f"qemu-system.*wwrig\\.{os_type}"],
+            capture_output=True,
+        )
+        # Kill websockify by matching WS port
+        if ws_port:
+            subprocess.run(
+                ["pkill", "-f", f"websockify.*{ws_port}"],
+                capture_output=True,
+            )
 
-    # Kill display refresher
+    # Kill display refresher (macOS QEMU only)
     subprocess.run(
         ["pkill", "-f", "refresh_display.py"],
         capture_output=True,
@@ -357,7 +376,10 @@ async def terminate_session(vm_id: str):
             pass
 
     s["status"] = "terminated"
-    log(f"SESSION TERMINATED: {vm_id} (VNC:{vnc_port} WS:{ws_port})", "WARN")
+    if is_fusion:
+        log(f"SESSION TERMINATED: {vm_id} (FUSION)", "WARN")
+    else:
+        log(f"SESSION TERMINATED: {vm_id} (VNC:{vnc_port} WS:{ws_port})", "WARN")
     return {"status": "terminated"}
 
 
@@ -370,8 +392,21 @@ async def list_disks():
         path = img_dir / name
         os_type = "linux" if "linux" in name else "windows"
         disk_label = "wwrig.linux" if "linux" in name else "wwrig.windows"
-        exists = path.exists() and path.stat().st_size > 0
-        size_mb = round(path.stat().st_size / (1024 * 1024), 1) if exists else 0
+
+        if os_type == "windows":
+            # Check for VMware Fusion bundle first, fall back to QCOW2
+            vmx_path = img_dir / "wwrig-windows.vmwarevm" / "wwrig-windows.vmx"
+            fusion_disk = img_dir / "wwrig-windows.vmwarevm" / "wwrig-windows.vmdk"
+            if vmx_path.exists():
+                exists = True
+                size_mb = round(fusion_disk.stat().st_size / (1024 * 1024), 1) if fusion_disk.exists() else 0
+            else:
+                exists = path.exists() and path.stat().st_size > 0
+                size_mb = round(path.stat().st_size / (1024 * 1024), 1) if exists else 0
+        else:
+            exists = path.exists() and path.stat().st_size > 0
+            size_mb = round(path.stat().st_size / (1024 * 1024), 1) if exists else 0
+
         disks.append({
             "os_type": os_type,
             "label": disk_label,
@@ -385,14 +420,24 @@ async def list_disks():
 @app.post("/api/vm/resume/{os_type}")
 async def resume_vm(os_type: str, background_tasks: BackgroundTasks):
     """Resume a VM from existing disk (no ISO mount)"""
-    # Check disk exists
-    disk_name = f"wwrig-{os_type}.qcow2"
-    disk_path = PROJECT_DIR / "vm" / "images" / disk_name
-    if not disk_path.exists() or disk_path.stat().st_size == 0:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No existing disk found for {os_type}. Use /api/vm/launch for a fresh install."
-        )
+    img_dir = PROJECT_DIR / "vm" / "images"
+    is_fusion = os_type == "windows"
+
+    if is_fusion:
+        vmx_path = img_dir / "wwrig-windows.vmwarevm" / "wwrig-windows.vmx"
+        if not vmx_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="No Windows VM found. Install Windows first via the dashboard."
+            )
+    else:
+        disk_name = f"wwrig-{os_type}.qcow2"
+        disk_path = img_dir / disk_name
+        if not disk_path.exists() or disk_path.stat().st_size == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No existing disk found for {os_type}. Use /api/vm/launch for a fresh install."
+            )
 
     stats = await aggregate_stats()
     if stats["node_count"] == 0:
@@ -402,25 +447,29 @@ async def resume_vm(os_type: str, background_tasks: BackgroundTasks):
         )
 
     vm_id = str(uuid.uuid4())[:8].upper()
-
-    vnc_port = 5900 + len(vm_sessions)
-    for _ in range(50):
-        sock = socket.socket()
-        try:
-            sock.bind(("", vnc_port))
-            sock.close()
-            break
-        except OSError:
-            sock.close()
-            vnc_port += 1
-    ws_port = vnc_port + 100
-    novnc_url = (
-        f"http://localhost:{ws_port}/wwrig.html"
-        "?autoconnect=true&resize=scale"
-    )
-
     vcpus = max(2, min(stats["contributed_cores"], 8))
     ram_mb = max(2048, min(int(stats["contributed_ram_gb"] * 1024), 8192))
+
+    vnc_port = None
+    ws_port = None
+    novnc_url = None
+
+    if not is_fusion:
+        vnc_port = 5900 + len(vm_sessions)
+        for _ in range(50):
+            sock = socket.socket()
+            try:
+                sock.bind(("", vnc_port))
+                sock.close()
+                break
+            except OSError:
+                sock.close()
+                vnc_port += 1
+        ws_port = vnc_port + 100
+        novnc_url = (
+            f"http://localhost:{ws_port}/wwrig.html"
+            "?autoconnect=true&resize=scale"
+        )
 
     vm_sessions[vm_id] = {
         "id": vm_id,
@@ -430,16 +479,18 @@ async def resume_vm(os_type: str, background_tasks: BackgroundTasks):
         "vnc_port": vnc_port,
         "ws_port": ws_port,
         "novnc_url": novnc_url,
+        "fusion_mode": is_fusion,
         "status": "provisioning",
         "started": time.time(),
         "pid": None,
     }
 
+    tag = "FUSION" if is_fusion else f"VNC:{vnc_port}"
     log(f"SESSION RESUME: wwrig.{os_type.upper()} ID={vm_id} "
-        f"— {vcpus} vCPU / {ram_mb}MB RAM / VNC:{vnc_port}", "LAUNCH")
+        f"— {vcpus} vCPU / {ram_mb}MB RAM / {tag}", "LAUNCH")
 
     background_tasks.add_task(
-        _start_vm, vm_id, os_type, vcpus, ram_mb, vnc_port, resume_mode=True
+        _start_vm, vm_id, os_type, vcpus, ram_mb, vnc_port or 0, resume_mode=True
     )
     return {
         "vm_id": vm_id,
@@ -448,34 +499,49 @@ async def resume_vm(os_type: str, background_tasks: BackgroundTasks):
         "ram_mb": ram_mb,
         "vnc_port": vnc_port,
         "novnc_url": novnc_url,
-        "message": f"wwrig.{os_type} session {vm_id} resuming from disk...",
+        "fusion_mode": is_fusion,
+        "message": f"wwrig.{os_type} session {vm_id} resuming...",
     }
 
 
 @app.delete("/api/vm/disk/{os_type}")
 async def wipe_disk(os_type: str):
     """Delete the disk image for the given OS type"""
-    disk_name = f"wwrig-{os_type}.qcow2"
-    disk_path = PROJECT_DIR / "vm" / "images" / disk_name
-    if not disk_path.exists():
-        raise HTTPException(status_code=404, detail=f"No disk found for {os_type}")
-    disk_path.unlink()
-    log(f"DISK WIPED: {disk_name} ({os_type})", "WARN")
-    return {"status": "deleted", "os_type": os_type}
+    img_dir = PROJECT_DIR / "vm" / "images"
+    if os_type == "windows":
+        fusion_script = PROJECT_DIR / "vm" / "fusion.sh"
+        subprocess.run(["bash", str(fusion_script), "wipe"], capture_output=True)
+        log(f"DISK WIPED: wwrig-windows (Fusion)", "WARN")
+        return {"status": "deleted", "os_type": os_type}
+    else:
+        disk_name = f"wwrig-{os_type}.qcow2"
+        disk_path = img_dir / disk_name
+        if not disk_path.exists():
+            raise HTTPException(status_code=404, detail=f"No disk found for {os_type}")
+        disk_path.unlink()
+        log(f"DISK WIPED: {disk_name} ({os_type})", "WARN")
+        return {"status": "deleted", "os_type": os_type}
 
 
 async def _start_vm(
     vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port: int,
     resume_mode: bool = False
 ):
-    """Invoke the vm/launch.sh script (QEMU + noVNC)"""
-    script = PROJECT_DIR / "vm" / "launch.sh"
+    """Invoke the VM launcher script — Fusion for Windows, QEMU/launch.sh for Linux"""
+    is_fusion = os_type == "windows"
+    if is_fusion:
+        script = PROJECT_DIR / "vm" / "fusion.sh"
+        cmd = ["bash", str(script), "windows", str(vcpus), str(ram_mb),
+               "1" if resume_mode else "0"]
+    else:
+        script = PROJECT_DIR / "vm" / "launch.sh"
+        cmd = ["bash", str(script), os_type, str(vcpus),
+               str(ram_mb), str(vnc_port)]
+        if resume_mode:
+            cmd.append("1")
+
     if script.exists():
         try:
-            cmd = ["bash", str(script), os_type, str(vcpus),
-                   str(ram_mb), str(vnc_port)]
-            if resume_mode:
-                cmd.append("1")
             proc = subprocess.Popen(
                 cmd,
                 stdout=open(f"/tmp/wwrig_vm_{vm_id}.log", "w"),
@@ -491,7 +557,7 @@ async def _start_vm(
     else:
         await asyncio.sleep(3)
         vm_sessions[vm_id]["status"] = "running (demo)"
-        log(f"SESSION DEMO: {vm_id} — vm/launch.sh not found, "
+        log(f"SESSION DEMO: {vm_id} — {'fusion.sh' if is_fusion else 'launch.sh'} not found, "
             "running in display-only mode", "WARN")
 
 

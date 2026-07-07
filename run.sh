@@ -28,6 +28,9 @@ pkill -f "coordinator/server"  2>/dev/null || true
 pkill -f "node/daemon"         2>/dev/null || true
 pkill -f "gui.py"              2>/dev/null || true
 pkill -f "server.py"           2>/dev/null || true
+# Stop Fusion VM if running
+FUSION_SCRIPT="$WWRIG_DIR/vm/fusion.sh"
+[ -f "$FUSION_SCRIPT" ] && bash "$FUSION_SCRIPT" stop > /dev/null 2>&1 || true
 # Also kill by port in case process names don't match
 lsof -ti:8081,6000,6001,5900,5901,5902 | xargs kill -9 2>/dev/null || true
 echo -e "  ${DIM}[OK] All processes terminated${NC}"
