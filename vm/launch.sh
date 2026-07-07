@@ -233,19 +233,21 @@ case "$OS_TYPE" in
       -k en-us \
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
+      -global ICH9-LPC.noreboot=on \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
       -device intel-hda -device hda-duplex \
       -usb -device usb-tablet -device usb-kbd
 
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
-    if $IS_MACOS; then
-      REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
-        > "$LOG_DIR/refresh.log" 2>&1 &
-      echo $! > "$REFRESHER_PIDFILE"
-      echo "  [OK] Display refresher started (PID $!)"
-    fi
+    # Disabled for now — -vga virtio may provide real-time updates on its own.
+    # if $IS_MACOS; then
+    #   REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
+    #   nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
+    #     > "$LOG_DIR/refresh.log" 2>&1 &
+    #   echo $! > "$REFRESHER_PIDFILE"
+    #   echo "  [OK] Display refresher started (PID $!)"
+    # fi
     ;;
 
   macos)
