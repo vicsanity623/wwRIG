@@ -19,10 +19,14 @@ tell application "System Events"
               click menu item "VGA"
             on error
               try
-                click menu item "virtio"
+                click menu item "virtio-vga"
               on error
                 try
-                  click menu item "VMWare SVGA"
+                  click menu item "virtio"
+                on error
+                  try
+                    click menu item "VMWare SVGA"
+                  end try
                 end try
               end try
             end try

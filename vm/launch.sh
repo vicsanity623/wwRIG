@@ -167,7 +167,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.01 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
@@ -199,9 +199,9 @@ case "$OS_TYPE" in
         echo "       Download from: https://www.microsoft.com/software-download/windows11"
         exit 1
       fi
-      [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 40G
-      CDROM_ARGS=(-cdrom "$ISO_PATH" -drive file="$VIRTIO_ISO",index=1,media=cdrom)
-      BOOT_ORDER="dc"
+      [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 250G
+      CDROM_ARGS=(-cdrom "$ISO_PATH")
+      BOOT_ORDER="d"
     else
       CDROM_ARGS=(-drive file="$VIRTIO_ISO",index=1,media=cdrom)
       BOOT_ORDER="c"
@@ -220,14 +220,13 @@ case "$OS_TYPE" in
       -m "${RAM_MB}M" \
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
-      -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_synic,hv_stimer,hv_reset,hv_vpindex,hv_runtime \
-      -machine q35,kernel_irqchip=split \
+      $([ "$RESUME_MODE" = "1" ] && echo "-cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_synic,hv_stimer,hv_reset,hv_vpindex,hv_runtime -machine q35,kernel_irqchip=split" || echo "-cpu Broadwell -machine q35") \
       -device ahci,id=ahci \
       -drive file="$DISK_IMG",format=qcow2,if=none,id=drive0 \
       -device ide-hd,drive=drive0,bus=ahci.0 \
       "${CDROM_ARGS[@]}" \
       -boot order="$BOOT_ORDER" \
-      -vga virtio \
+      $([ "$RESUME_MODE" = "1" ] && echo "-vga virtio" || echo "-vga std") \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa,zoom-to-fit=on \
       -k en-us \
@@ -236,12 +235,10 @@ case "$OS_TYPE" in
       -global ICH9-LPC.noreboot=on \
       -device e1000,netdev=net0 \
       -netdev user,id=net0 \
-      -audiodev coreaudio,id=audio0 \
-      -device intel-hda -device hda-output,audiodev=audio0 \
+      -audiodev coreaudio,id=audio0 -device intel-hda -device hda-output,audiodev=audio0 \
       -usb -device usb-tablet -device usb-kbd
 
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
-    # Clicks View→virtio every 0.01s to force display buffer updates
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
       nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.01 \
