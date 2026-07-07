@@ -16,10 +16,10 @@ tell application "System Events"
         tell menu bar item "View"
           tell menu 1
             try
-              click menu item "virtio"
+              click menu item "VGA"
             on error
               try
-                click menu item "VGA"
+                click menu item "virtio"
               on error
                 try
                   click menu item "VMWare SVGA"
