@@ -220,8 +220,8 @@ case "$OS_TYPE" in
       -m "${RAM_MB}M" \
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
-      -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_reset,hv_vpindex,hv_runtime \
-      -machine q35,kernel_irqchip=split,hpet=off \
+      -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_synic,hv_stimer,hv_reset,hv_vpindex,hv_runtime \
+      -machine q35,kernel_irqchip=split \
       -device ahci,id=ahci \
       -drive file="$DISK_IMG",format=qcow2,if=none,id=drive0 \
       -device ide-hd,drive=drive0,bus=ahci.0 \
