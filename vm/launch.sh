@@ -234,7 +234,6 @@ case "$OS_TYPE" in
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
       -global ICH9-LPC.noreboot=on \
-      -no-reboot \
       -device e1000,netdev=net0 \
       -netdev user,id=net0 \
       -audiodev coreaudio,id=audio0 \
