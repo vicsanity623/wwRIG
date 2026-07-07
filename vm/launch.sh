@@ -249,6 +249,7 @@ case "$OS_TYPE" in
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
     fi
+    ;;
 
   macos)
     echo "  [!!] macOS on Intel QEMU requires a macOS installer ISO."
