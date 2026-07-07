@@ -66,7 +66,7 @@ fi
 python3 "$WWRIG_DIR/node/daemon.py" \
   --coordinator "http://localhost:8081" \
   --token "$TOKEN" \
-  --contribution 20 > /dev/null 2>&1 &
+  --contribution 75 > /dev/null 2>&1 &
 echo -e "  ${CYAN}[OK]${NC} Node daemon started"
 
 # Wait for coordinator
