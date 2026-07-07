@@ -214,6 +214,15 @@ case "$OS_TYPE" in
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
       -usb -device usb-mouse -device usb-kbd
+
+    # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
+    if $IS_MACOS; then
+      REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.5 \
+        > "$LOG_DIR/refresh.log" 2>&1 &
+      echo $! > "$REFRESHER_PIDFILE"
+      echo "  [OK] Display refresher started (PID $!)"
+    fi
     ;;
 
   macos)
