@@ -227,14 +227,14 @@ case "$OS_TYPE" in
       -device ide-hd,drive=drive0,bus=ahci.0 \
       "${CDROM_ARGS[@]}" \
       -boot order="$BOOT_ORDER" \
-      -vga virtio \
+      -vga std \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa \
       -k en-us \
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
       -global ICH9-LPC.noreboot=on \
-      -device virtio-net-pci,netdev=net0 \
+      -device e1000,netdev=net0 \
       -netdev user,id=net0 \
       -device intel-hda -device hda-duplex \
       -usb -device usb-mouse -device usb-kbd
