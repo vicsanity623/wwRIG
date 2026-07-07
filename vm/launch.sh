@@ -221,7 +221,7 @@ case "$OS_TYPE" in
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
       -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_reset,hv_vpindex,hv_runtime \
-      -machine q35,kernel_irqchip=split \
+      -machine q35,kernel_irqchip=split,hpet=off \
       -device ahci,id=ahci \
       -drive file="$DISK_IMG",format=qcow2,if=none,id=drive0 \
       -device ide-hd,drive=drive0,bus=ahci.0 \
@@ -231,7 +231,6 @@ case "$OS_TYPE" in
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa \
       -k en-us \
-      -no-hpet \
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
       -device virtio-net-pci,netdev=net0 \
