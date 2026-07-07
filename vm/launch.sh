@@ -155,7 +155,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.025 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
@@ -219,7 +219,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.025 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
