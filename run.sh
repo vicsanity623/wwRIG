@@ -4,7 +4,6 @@
 # One-command kill-all + restart with two terminals (coordinator + GUI).
 # ═══════════════════════════════════════════════════════════════════════════════
 
-set -e
 WWRIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 GREEN='\033[0;32m'
@@ -22,12 +21,13 @@ echo ""
 
 # ── Kill everything ────────────────────────────────────────────────────────────
 echo -e "${YELLOW}  Killing all WWRIG processes...${NC}"
-pkill -f "qemu-system"     2>/dev/null; echo -e "  ${DIM}[KILL] QEMU${NC}"
-pkill -f websockify        2>/dev/null; echo -e "  ${DIM}[KILL] websockify${NC}"
-pkill -f refresh_display   2>/dev/null; echo -e "  ${DIM}[KILL] display refresher${NC}"
-pkill -f "coordinator/server" 2>/dev/null; echo -e "  ${DIM}[KILL] coordinator${NC}"
-pkill -f "node/daemon"     2>/dev/null; echo -e "  ${DIM}[KILL] node daemon${NC}"
-pkill -f "gui.py"          2>/dev/null; echo -e "  ${DIM}[KILL] GUI${NC}"
+pkill -f "qemu-system"     2>/dev/null || true
+pkill -f websockify        2>/dev/null || true
+pkill -f refresh_display   2>/dev/null || true
+pkill -f "coordinator/server" 2>/dev/null || true
+pkill -f "node/daemon"     2>/dev/null || true
+pkill -f "gui.py"          2>/dev/null || true
+echo -e "  ${DIM}[OK] All processes terminated${NC}"
 
 # ── Clean up stale files ──────────────────────────────────────────────────────
 echo ""
