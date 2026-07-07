@@ -201,7 +201,8 @@ case "$OS_TYPE" in
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
       -cpu host \
-      -drive file="$DISK_IMG",format=qcow2,if=ide \
+      -drive file="$DISK_IMG",format=qcow2,if=none,id=drive0 \
+      -device ide-hd,drive=drive0,bus=ahci.0 \
       -cdrom "$ISO_PATH" \
       -drive file="$VIRTIO_ISO",index=1,media=cdrom \
       -boot order=dc \
@@ -209,9 +210,10 @@ case "$OS_TYPE" in
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa \
       -k en-us \
-      -global PIIX4_PM.disable_s3=1 \
-      -global PIIX4_PM.disable_s4=1 \
-      -machine kernel_irqchip=split \
+      -machine q35,kernel_irqchip=split \
+      -device ahci,id=ahci \
+      -global ICH9-LPC.disable_s3=1 \
+      -global ICH9-LPC.disable_s4=1 \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
       -usb -device usb-mouse -device usb-kbd
