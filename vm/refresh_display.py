@@ -12,7 +12,6 @@ tell application "System Events"
   if (count of qemuList) > 0 then
     set qemuProcess to item 1 of qemuList
     tell qemuProcess
-      set frontmost to true
       tell menu bar 1
         tell menu bar item "View"
           tell menu 1

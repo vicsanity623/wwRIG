@@ -158,7 +158,7 @@ case "$OS_TYPE" in
       "${CDROM_ARGS[@]}" \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
-      $([ "$IS_MACOS" = true ] && echo "-display cocoa") \
+      $([ "$IS_MACOS" = true ] && echo "-display cocoa,zoom-to-fit=on") \
       -k en-us \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
@@ -167,7 +167,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.01 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
@@ -227,9 +227,9 @@ case "$OS_TYPE" in
       -device ide-hd,drive=drive0,bus=ahci.0 \
       "${CDROM_ARGS[@]}" \
       -boot order="$BOOT_ORDER" \
-      -vga std \
+      -vga virtio \
       -vnc ":${DISPLAY_NUM}" \
-      -display cocoa \
+      -display cocoa,zoom-to-fit=on \
       -k en-us \
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
@@ -237,12 +237,12 @@ case "$OS_TYPE" in
       -device e1000,netdev=net0 \
       -netdev user,id=net0 \
       -device intel-hda -device hda-duplex \
-      -usb -device usb-mouse -device usb-kbd
+      -usb -device usb-tablet -device usb-kbd
 
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.01 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
