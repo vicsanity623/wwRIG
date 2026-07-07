@@ -227,7 +227,7 @@ case "$OS_TYPE" in
       -device ide-hd,drive=drive0,bus=ahci.0 \
       "${CDROM_ARGS[@]}" \
       -boot order="$BOOT_ORDER" \
-      -vga virtio \
+      -vga std \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa,zoom-to-fit=on \
       -k en-us \
