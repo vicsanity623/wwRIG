@@ -3,11 +3,12 @@
 # WWRIG VM Launcher — World Wide Rig v0.2.1
 # Launches a QEMU virtual machine and exposes it via noVNC in the browser.
 #
-# Usage: bash launch.sh <os_type> <vcpus> <ram_mb> <vnc_port>
-#   os_type  : linux | windows | macos
-#   vcpus    : number of virtual CPU cores
-#   ram_mb   : RAM in MB (e.g. 4096)
-#   vnc_port : VNC display port (e.g. 5900)
+# Usage: bash launch.sh <os_type> <vcpus> <ram_mb> <vnc_port> [resume_mode]
+#   os_type     : linux | windows | macos
+#   vcpus       : number of virtual CPU cores
+#   ram_mb      : RAM in MB (e.g. 4096)
+#   vnc_port    : VNC display port (e.g. 5900)
+#   resume_mode : 0=fresh install (default), 1=resume existing disk
 #
 # Called automatically by the coordinator when a session is requested.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -16,6 +17,7 @@ OS_TYPE="${1:-linux}"
 VCPUS="${2:-4}"
 RAM_MB="${3:-4096}"
 VNC_PORT="${4:-5900}"
+RESUME_MODE="${5:-0}"
 WS_PORT=$((VNC_PORT + 100))
 
 WWRIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,6 +36,7 @@ echo "  vCPUs      : ${VCPUS}"
 echo "  RAM        : ${RAM_MB}MB"
 echo "  VNC Port   : :${DISPLAY_NUM} (port ${VNC_PORT})"
 echo "  noVNC Port : ${WS_PORT}"
+echo "  Mode       : $([ "$RESUME_MODE" = "1" ] && echo "RESUME (existing disk)" || echo "INSTALL (with ISO)")"
 echo ""
 
 # ── Detect Accelerator ────────────────────────────────────────────────────────
@@ -91,16 +94,23 @@ case "$OS_TYPE" in
     ISO_URL="https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso"
     DISK_IMG="$VM_DIR/wwrig-linux.qcow2"
 
-    if [ ! -f "$ISO_PATH" ]; then
-      echo "  Downloading Alpine Linux 3.19 (~60MB)..."
-      if command -v curl &>/dev/null; then
-        curl -L --progress-bar -o "$ISO_PATH" "$ISO_URL" || { echo "Download failed"; exit 1; }
-      elif command -v wget &>/dev/null; then
-        wget -q --show-progress -O "$ISO_PATH" "$ISO_URL" || { echo "Download failed"; exit 1; }
-      else
-        echo "  [!!] curl or wget required."
-        exit 1
+    if [ "$RESUME_MODE" != "1" ]; then
+      if [ ! -f "$ISO_PATH" ]; then
+        echo "  Downloading Alpine Linux 3.19 (~60MB)..."
+        if command -v curl &>/dev/null; then
+          curl -L --progress-bar -o "$ISO_PATH" "$ISO_URL" || { echo "Download failed"; exit 1; }
+        elif command -v wget &>/dev/null; then
+          wget -q --show-progress -O "$ISO_PATH" "$ISO_URL" || { echo "Download failed"; exit 1; }
+        else
+          echo "  [!!] curl or wget required."
+          exit 1
+        fi
       fi
+      CDROM_ARGS=(-cdrom "$ISO_PATH")
+      ALPINE_APPEND="console=tty0 console=ttyS0 alpine_dev=/dev/sr0:iso9660 modloop=/boot/modloop-virt modules=loop,squashfs,sd-mod,usb-storage quiet"
+    else
+      CDROM_ARGS=()
+      ALPINE_APPEND="console=tty0 console=ttyS0 quiet"
     fi
 
     if [ ! -f "$DISK_IMG" ]; then
@@ -112,13 +122,15 @@ case "$OS_TYPE" in
     KERNEL="$VM_DIR/vmlinuz"
     INITRD="$VM_DIR/initramfs"
     if [ ! -f "$KERNEL" ] || [ ! -f "$INITRD" ]; then
-      echo "  Extracting kernel from ISO..."
-      TMPMNT="/tmp/alpine-mnt-$$"
-      mkdir -p "$TMPMNT"
-      bsdtar xf "$ISO_PATH" -C "$TMPMNT" 2>/dev/null
-      cp "$TMPMNT"/boot/vmlinuz-virt "$KERNEL" 2>/dev/null
-      cp "$TMPMNT"/boot/initramfs-virt "$INITRD" 2>/dev/null
-      rm -rf "$TMPMNT"
+      [ "$RESUME_MODE" != "1" ] && {
+        echo "  Extracting kernel from ISO..."
+        TMPMNT="/tmp/alpine-mnt-$$"
+        mkdir -p "$TMPMNT"
+        bsdtar xf "$ISO_PATH" -C "$TMPMNT" 2>/dev/null
+        cp "$TMPMNT"/boot/vmlinuz-virt "$KERNEL" 2>/dev/null
+        cp "$TMPMNT"/boot/initramfs-virt "$INITRD" 2>/dev/null
+        rm -rf "$TMPMNT"
+      }
     fi
 
     echo ""
@@ -141,9 +153,9 @@ case "$OS_TYPE" in
       -cpu host \
       -kernel "$KERNEL" \
       -initrd "$INITRD" \
-      -append "console=tty0 console=ttyS0 alpine_dev=/dev/sr0:iso9660 modloop=/boot/modloop-virt modules=loop,squashfs,sd-mod,usb-storage quiet" \
+      -append "$ALPINE_APPEND" \
       -drive file="$DISK_IMG",format=qcow2,if=virtio \
-      -cdrom "$ISO_PATH" \
+      "${CDROM_ARGS[@]}" \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
       $([ "$IS_MACOS" = true ] && echo "-display cocoa") \
@@ -175,17 +187,25 @@ case "$OS_TYPE" in
     DISK_IMG="$VM_DIR/wwrig-windows.qcow2"
     VIRTIO_ISO="$VM_DIR/virtio-win.iso"
 
-    if [ ! -f "$ISO_PATH" ]; then
-      echo "  [!!] Windows ISO not found at $ISO_PATH"
-      echo "       Download from: https://www.microsoft.com/software-download/windows11"
-      exit 1
-    fi
     if [ ! -f "$VIRTIO_ISO" ]; then
       echo "  [!!] VirtIO drivers ISO not found at $VIRTIO_ISO"
       echo "       Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/"
       exit 1
     fi
-    [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 40G
+
+    if [ "$RESUME_MODE" != "1" ]; then
+      if [ ! -f "$ISO_PATH" ]; then
+        echo "  [!!] Windows ISO not found at $ISO_PATH"
+        echo "       Download from: https://www.microsoft.com/software-download/windows11"
+        exit 1
+      fi
+      [ ! -f "$DISK_IMG" ] && qemu-img create -f qcow2 "$DISK_IMG" 40G
+      CDROM_ARGS=(-cdrom "$ISO_PATH" -drive file="$VIRTIO_ISO",index=1,media=cdrom)
+      BOOT_ORDER="dc"
+    else
+      CDROM_ARGS=(-drive file="$VIRTIO_ISO",index=1,media=cdrom)
+      BOOT_ORDER="c"
+    fi
 
     echo ""
     echo "  ──────────────────────────────────────────────────"
@@ -200,22 +220,22 @@ case "$OS_TYPE" in
       -m "${RAM_MB}M" \
       -smp "${VCPUS}" \
       $QEMU_ACCEL \
-      -cpu host \
+      -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_reset,hv_vpindex,hv_runtime \
+      -machine q35,kernel_irqchip=split \
+      -device ahci,id=ahci \
       -drive file="$DISK_IMG",format=qcow2,if=none,id=drive0 \
       -device ide-hd,drive=drive0,bus=ahci.0 \
-      -cdrom "$ISO_PATH" \
-      -drive file="$VIRTIO_ISO",index=1,media=cdrom \
-      -boot order=dc \
+      "${CDROM_ARGS[@]}" \
+      -boot order="$BOOT_ORDER" \
       -vga std \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa \
       -k en-us \
-      -machine q35,kernel_irqchip=split \
-      -device ahci,id=ahci \
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
+      -device intel-hda -device hda-duplex \
       -usb -device usb-mouse -device usb-kbd
 
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)

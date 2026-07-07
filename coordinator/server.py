@@ -361,22 +361,130 @@ async def terminate_session(vm_id: str):
     return {"status": "terminated"}
 
 
+@app.get("/api/vm/disks")
+async def list_disks():
+    """List available disk images for resume/wipe"""
+    img_dir = PROJECT_DIR / "vm" / "images"
+    disks = []
+    for name in ("wwrig-linux.qcow2", "wwrig-windows.qcow2"):
+        path = img_dir / name
+        os_type = "linux" if "linux" in name else "windows"
+        disk_label = "wwrig.linux" if "linux" in name else "wwrig.windows"
+        exists = path.exists() and path.stat().st_size > 0
+        size_mb = round(path.stat().st_size / (1024 * 1024), 1) if exists else 0
+        disks.append({
+            "os_type": os_type,
+            "label": disk_label,
+            "disk_path": str(path),
+            "exists": exists,
+            "size_mb": size_mb,
+        })
+    return disks
+
+
+@app.post("/api/vm/resume/{os_type}")
+async def resume_vm(os_type: str, background_tasks: BackgroundTasks):
+    """Resume a VM from existing disk (no ISO mount)"""
+    # Check disk exists
+    disk_name = f"wwrig-{os_type}.qcow2"
+    disk_path = PROJECT_DIR / "vm" / "images" / disk_name
+    if not disk_path.exists() or disk_path.stat().st_size == 0:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No existing disk found for {os_type}. Use /api/vm/launch for a fresh install."
+        )
+
+    stats = await aggregate_stats()
+    if stats["node_count"] == 0:
+        raise HTTPException(
+            status_code=503,
+            detail="No WWRIG nodes online. Start a node daemon first."
+        )
+
+    vm_id = str(uuid.uuid4())[:8].upper()
+
+    vnc_port = 5900 + len(vm_sessions)
+    for _ in range(50):
+        sock = socket.socket()
+        try:
+            sock.bind(("", vnc_port))
+            sock.close()
+            break
+        except OSError:
+            sock.close()
+            vnc_port += 1
+    ws_port = vnc_port + 100
+    novnc_url = (
+        f"http://localhost:{ws_port}/wwrig.html"
+        "?autoconnect=true&resize=scale"
+    )
+
+    vcpus = max(2, min(stats["contributed_cores"], 8))
+    ram_mb = max(2048, min(int(stats["contributed_ram_gb"] * 1024), 8192))
+
+    vm_sessions[vm_id] = {
+        "id": vm_id,
+        "os_type": os_type,
+        "vcpus": vcpus,
+        "ram_mb": ram_mb,
+        "vnc_port": vnc_port,
+        "ws_port": ws_port,
+        "novnc_url": novnc_url,
+        "status": "provisioning",
+        "started": time.time(),
+        "pid": None,
+    }
+
+    log(f"SESSION RESUME: wwrig.{os_type.upper()} ID={vm_id} "
+        f"— {vcpus} vCPU / {ram_mb}MB RAM / VNC:{vnc_port}", "LAUNCH")
+
+    background_tasks.add_task(
+        _start_vm, vm_id, os_type, vcpus, ram_mb, vnc_port, resume_mode=True
+    )
+    return {
+        "vm_id": vm_id,
+        "status": "provisioning",
+        "vcpus": vcpus,
+        "ram_mb": ram_mb,
+        "vnc_port": vnc_port,
+        "novnc_url": novnc_url,
+        "message": f"wwrig.{os_type} session {vm_id} resuming from disk...",
+    }
+
+
+@app.delete("/api/vm/disk/{os_type}")
+async def wipe_disk(os_type: str):
+    """Delete the disk image for the given OS type"""
+    disk_name = f"wwrig-{os_type}.qcow2"
+    disk_path = PROJECT_DIR / "vm" / "images" / disk_name
+    if not disk_path.exists():
+        raise HTTPException(status_code=404, detail=f"No disk found for {os_type}")
+    disk_path.unlink()
+    log(f"DISK WIPED: {disk_name} ({os_type})", "WARN")
+    return {"status": "deleted", "os_type": os_type}
+
+
 async def _start_vm(
-    vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port: int
+    vm_id: str, os_type: str, vcpus: int, ram_mb: int, vnc_port: int,
+    resume_mode: bool = False
 ):
     """Invoke the vm/launch.sh script (QEMU + noVNC)"""
     script = PROJECT_DIR / "vm" / "launch.sh"
     if script.exists():
         try:
+            cmd = ["bash", str(script), os_type, str(vcpus),
+                   str(ram_mb), str(vnc_port)]
+            if resume_mode:
+                cmd.append("1")
             proc = subprocess.Popen(
-                ["bash", str(script), os_type, str(vcpus),
-                 str(ram_mb), str(vnc_port)],
+                cmd,
                 stdout=open(f"/tmp/wwrig_vm_{vm_id}.log", "w"),
                 stderr=subprocess.STDOUT,
             )
             vm_sessions[vm_id]["pid"] = proc.pid
             vm_sessions[vm_id]["status"] = "running"
-            log(f"SESSION RUNNING: {vm_id} PID={proc.pid}")
+            label = "RESUME" if resume_mode else "SESSION"
+            log(f"{label} RUNNING: {vm_id} PID={proc.pid}")
         except Exception as e:
             vm_sessions[vm_id]["status"] = "error"
             log(f"SESSION ERROR: {vm_id} — {e}", "ERROR")

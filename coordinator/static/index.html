@@ -488,21 +488,44 @@
     letter-spacing: 1px;
   }
 
-  .kill-btn {
+  .kill-btn, .resume-btn, .wipe-btn {
     background: transparent;
-    border: 1px solid var(--red);
-    color: var(--red);
     font-family: var(--mono);
     font-size: 8px;
     letter-spacing: 1px;
     padding: 2px 6px;
     cursor: pointer;
     transition: all 0.2s;
-    margin-left: 6px;
+    margin-left: 4px;
+  }
+
+  .kill-btn {
+    border: 1px solid var(--red);
+    color: var(--red);
   }
 
   .kill-btn:hover {
     background: var(--red);
+    color: var(--bg);
+  }
+
+  .resume-btn {
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+  }
+
+  .resume-btn:hover {
+    background: var(--cyan);
+    color: var(--bg);
+  }
+
+  .wipe-btn {
+    border: 1px solid var(--amber);
+    color: var(--amber);
+  }
+
+  .wipe-btn:hover {
+    background: var(--amber);
     color: var(--bg);
   }
 
@@ -786,8 +809,11 @@
         <div class="os-desc">Ubuntu 22.04 LTS<br>Full desktop via browser VNC</div>
         <div class="os-badge">AVAILABLE</div>
         <button class="launch-btn" id="btn-linux" onclick="openLaunchModal('linux')">
-          <span>▶ Launch</span>
+          <span>▶ Install</span>
         </button>
+        <div id="disk-info-linux" class="disk-info" style="margin-top:8px;font-size:10px;color:var(--text-dim);display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+          <span>Disk: checking...</span>
+        </div>
       </div>
 
       <!-- Windows -->
@@ -796,8 +822,11 @@
         <div class="os-desc">Windows 10 x64<br>Install via VNC (license required from host)</div>
         <div class="os-badge">AVAILABLE</div>
         <button class="launch-btn" id="btn-win" onclick="openLaunchModal('windows')">
-          <span>▶ Launch</span>
+          <span>▶ Install</span>
         </button>
+        <div id="disk-info-windows" class="disk-info" style="margin-top:8px;font-size:10px;color:var(--text-dim);display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+          <span>Disk: checking...</span>
+        </div>
       </div>
 
       <!-- macOS -->
@@ -1128,6 +1157,55 @@ async function terminateSession(vmId) {
   }
 }
 
+// ── Disk Management ──────────────────────────────────────────────────────────
+async function fetchDisks() {
+  try {
+    const r = await fetch(`${API}/api/vm/disks`);
+    if (!r.ok) return;
+    const disks = await r.json();
+    renderDisks(disks);
+  } catch (_) {}
+}
+
+function renderDisks(disks) {
+  (disks || []).forEach(d => {
+    const el = document.getElementById('disk-info-' + d.os_type);
+    if (!el) return;
+    if (d.exists) {
+      el.innerHTML = `
+        <span style="color:var(--green)">● ${d.size_mb.toFixed(0)}MB</span>
+        <button class="resume-btn" onclick="resumeVM('${d.os_type}')">RESUME</button>
+        <button class="wipe-btn" onclick="wipeDisk('${d.os_type}')">WIPE</button>
+      `;
+    } else {
+      el.innerHTML = `<span>No disk</span>`;
+    }
+  });
+}
+
+async function resumeVM(osType) {
+  const btn = document.querySelector(`#disk-info-${osType} .resume-btn`);
+  if (btn) btn.textContent = '...';
+  try {
+    const r = await fetch(`${API}/api/vm/resume/${osType}`, { method: 'POST' });
+    const data = await r.json();
+    await fetchSessions();
+    await fetchLog();
+  } catch (e) {
+    console.error('Resume failed', e);
+  }
+}
+
+async function wipeDisk(osType) {
+  if (!confirm(`Wipe the ${osType} disk? This cannot be undone.`)) return;
+  try {
+    await fetch(`${API}/api/vm/disk/${osType}`, { method: 'DELETE' });
+    await fetchDisks();
+  } catch (e) {
+    console.error('Wipe failed', e);
+  }
+}
+
 // Close modal on overlay click
 document.getElementById('launch-modal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
@@ -1135,7 +1213,7 @@ document.getElementById('launch-modal').addEventListener('click', function(e) {
 
 // ── Poll Loop ─────────────────────────────────────────────────────────────────
 async function poll() {
-  await Promise.all([fetchStats(), fetchNodes(), fetchSessions(), fetchLog()]);
+  await Promise.all([fetchStats(), fetchNodes(), fetchSessions(), fetchLog(), fetchDisks()]);
 }
 
 poll();
