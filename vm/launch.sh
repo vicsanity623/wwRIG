@@ -167,7 +167,7 @@ case "$OS_TYPE" in
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.025 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
@@ -227,21 +227,22 @@ case "$OS_TYPE" in
       -device ide-hd,drive=drive0,bus=ahci.0 \
       "${CDROM_ARGS[@]}" \
       -boot order="$BOOT_ORDER" \
-      -vga std \
+      -vga virtio \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa \
       -k en-us \
+      -no-hpet \
       -global ICH9-LPC.disable_s3=1 \
       -global ICH9-LPC.disable_s4=1 \
       -device virtio-net-pci,netdev=net0 \
       -netdev user,id=net0 \
       -device intel-hda -device hda-duplex \
-      -usb -device usb-mouse -device usb-kbd
+      -usb -device usb-tablet -device usb-kbd
 
     # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
     if $IS_MACOS; then
       REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.025 \
+      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
         > "$LOG_DIR/refresh.log" 2>&1 &
       echo $! > "$REFRESHER_PIDFILE"
       echo "  [OK] Display refresher started (PID $!)"
