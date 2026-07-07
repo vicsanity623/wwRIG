@@ -227,7 +227,7 @@ case "$OS_TYPE" in
       -device ide-hd,drive=drive0,bus=ahci.0 \
       "${CDROM_ARGS[@]}" \
       -boot order="$BOOT_ORDER" \
-      -vga vmware \
+      -vga virtio \
       -vnc ":${DISPLAY_NUM}" \
       -display cocoa,zoom-to-fit=on \
       -k en-us \
@@ -241,14 +241,11 @@ case "$OS_TYPE" in
       -device intel-hda -device hda-output,audiodev=audio0 \
       -usb -device usb-tablet -device usb-kbd
 
-    # On macOS, start periodic display refresher (Cocoa VGA bug workaround)
-    if $IS_MACOS; then
-      REFRESHER_PIDFILE="$LOG_DIR/wwrig-refresh-${VNC_PORT}.pid"
-      nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
-        > "$LOG_DIR/refresh.log" 2>&1 &
-      echo $! > "$REFRESHER_PIDFILE"
-      echo "  [OK] Display refresher started (PID $!)"
-    fi
+    # Display refresher disabled for virtio-gpu (native real-time updates on macOS Cocoa)
+    # Enable if display freezes:
+    #   nohup python3 "$WWRIG_DIR/vm/refresh_display.py" 0.05 \
+    #     > "$LOG_DIR/refresh.log" 2>&1 &
+    ;;
     ;;
 
   macos)
